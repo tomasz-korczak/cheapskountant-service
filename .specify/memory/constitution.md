@@ -1,50 +1,58 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+Sync Impact Report
+- Version change: template (unversioned) → 1.0.0
+- Modified principles:
+  - [PRINCIPLE_1_NAME] → I. REST API Only
+  - [PRINCIPLE_2_NAME] → II. Explicit API Contracts
+  - [PRINCIPLE_3_NAME] → III. Tested Behavior
+  - [PRINCIPLE_4_NAME] → IV. Secure by Default
+  - [PRINCIPLE_5_NAME] → removed (bare minimum scope; four principles suffice)
+- Added sections: Technical Constraints, Development Workflow
+- Removed sections: none
+- Deferred TODOs: none
+-->
+
+# Cheapskountant Service Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. REST API Only
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+The application MUST expose its functionality exclusively through HTTP REST endpoints returning
+JSON. It MUST NOT contain frontend code, server-rendered views, or static web assets.
+Operational endpoints (health checks, API documentation) are permitted.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### II. Explicit API Contracts
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+Every endpoint MUST have a documented contract defining method, path, request, response, and
+error format. Endpoints MUST use correct HTTP methods and status codes. Errors MUST use a single
+consistent machine-readable format. Breaking contract changes MUST be versioned.
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### III. Tested Behavior
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+Every endpoint MUST be covered by an automated test verifying its success and error responses.
+Business logic MUST be covered by unit tests. All tests MUST pass before a change is merged.
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### IV. Secure by Default
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+All request input MUST be validated. Endpoints MUST require authentication unless explicitly
+declared public. Secrets MUST NOT be stored in source code or written to logs.
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+## Technical Constraints
+
+- Configuration MUST be supplied externally (environment variables or configuration files).
+- Database schema changes MUST be delivered as Liquibase SQL changesets.
+- The service MUST expose a health check endpoint.
+
+## Development Workflow
+
+- Every change MUST be delivered through a reviewed pull request.
+- Reviewers MUST verify compliance with this constitution.
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+This constitution overrides conflicting practices. Amendments require a pull request describing
+the change and its rationale. Versioning follows semantic versioning: MAJOR for removed or
+redefined principles, MINOR for added principles or sections, PATCH for clarifications.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Version**: 1.0.0 | **Ratified**: 2026-09-26 | **Last Amended**: 2026-09-26
