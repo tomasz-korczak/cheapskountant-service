@@ -6,16 +6,16 @@
 
 ## Summary
 
-An authorized caller submits one to five photos of a single Polish fiscal receipt. The service transcribes them with a multimodal model into one structured receipt, stores that receipt only when the transcription is complete, and returns it. Failures return one fixed reason and a short explanation, and they leave nothing stored.
+Transcription and storage are separate endpoints. An authorized caller submits one to five photos of a single Polish fiscal receipt to `POST /api/transcription`. That endpoint transcribes them with a multimodal model into one structured receipt and returns it without storing it and without an id. `POST /api/receipt` accepts that same object as JSON, stores it only when it is complete, and returns it with an assigned id. It does not accept photos and does not call the model. Failures return one fixed reason and a short explanation, and they leave nothing stored.
 
 Technical approach: a Maven Spring Boot 4.1.1 service on JDK 23 (`C:\tools\jdk-23.0.2`), package `pl.tomaszko`, artifact `cheapskountant-service`. Transcription is a Spring AI `ChatClient` call through the OpenAI-compatible starter pointed at OpenRouter, model `google/gemini-2.5-flash`. The model must return JSON matching `.external-resources/receipt-schema.json`. MariaDB holds the ledger. Liquibase SQL changesets run at startup before the application serves requests. The original photos are not stored.
 
 The spec and this plan agree on these rules:
 
-- One request contains one to five images, in order, of one receipt. More than five images is `invalid submission`. More than one receipt in the images is `unreadable`.
+- One transcription request contains one to five images, in order, of one receipt. More than five images is `invalid submission`. More than one receipt in the images is `unreadable`. Receipt storage accepts the transcribed JSON object, ignores a client-supplied id, and assigns the stored id.
 - A missing image media type is sent to the model as `image/jpeg`. A declared type other than JPEG, PNG, or WebP is `invalid submission`.
 - A stored receipt has at least one tax summary entry. An empty tax summary is `incomplete`.
-- A database failure after a successful transcription uses reason `storage failed` and HTTP 500. The transaction rolls back, so nothing remains stored.
+- A database failure while storing a valid receipt uses reason `storage failed` and HTTP 500. The transaction rolls back, so nothing remains stored. Transcription never writes a row.
 - Image bytes and base64 payloads are not written to the log. The log records image count, media type, and size instead, because the spec forbids retaining the photo and the constitution forbids sensitive data in logs.
 
 ## Technical Context
@@ -32,11 +32,11 @@ The spec and this plan agree on these rules:
 
 **Project Type**: web-service (REST API only)
 
-**Performance Goals**: The caller receives the stored receipt or a failure within 60 seconds of submitting one request. This is a single-user expense ledger, not a high-throughput service.
+**Performance Goals**: The caller receives the transcribed receipt or a failure within 60 seconds of submitting one transcription request. Storage does not call the model. This is a single-user expense ledger, not a high-throughput service.
 
 **Constraints**: Photos are not retained. Secrets and image payloads are not logged. One to five images per request, each at most 10 MB. Accepted declared types are JPEG, PNG, and WebP. A missing media type is treated as JPEG. A stored receipt requires at least one tax summary entry. Duplicate receipts are allowed. Amounts are not reconciled arithmetically. No user accounts.
 
-**Scale/Scope**: One create-receipt endpoint, one shared ledger, one transcription provider. Listing and editing receipts are out of scope.
+**Scale/Scope**: One transcription endpoint, one create-receipt endpoint, one shared ledger, one transcription provider. Listing and editing receipts are out of scope.
 
 ## Constitution Check
 
@@ -44,15 +44,15 @@ The spec and this plan agree on these rules:
 
 | Gate | Result |
 |------|--------|
-| I. REST API only. JSON HTTP endpoints. No frontend, views, or static site. | Pass. `POST /api/receipt` plus the operational health endpoint. |
+| I. REST API only. JSON HTTP endpoints. No frontend, views, or static site. | Pass. `POST /api/transcription`, `POST /api/receipt`, and the operational health endpoint. |
 | II. Explicit API contracts. Correct HTTP usage. One error format. Breaking changes versioned. | Pass. Contract in `contracts/create-receipt.openapi.yaml`. |
 | III. Tested behavior. Endpoint success and error tests. Unit tests for business rules. Tests pass before merge. | Pass. Quickstart lists the required tests. Real OpenRouter calls are manual, not the default test run. |
-| IV. Secure by default. Validate input. Authenticate unless the endpoint is explicitly public. No secrets in source or logs. | Pass. `/api/receipt` requires `API_KEY`. `/actuator/health` is explicitly public. Input is validated before transcription. `OPENROUTER_API_KEY` and `DB_PASSWORD` are environment variables and are excluded from logs. |
+| IV. Secure by default. Validate input. Authenticate unless the endpoint is explicitly public. No secrets in source or logs. | Pass. `/api/transcription` and `/api/receipt` require `API_KEY`. `/actuator/health` is explicitly public. Images are validated before transcription. A receipt body is validated before insert. `OPENROUTER_API_KEY` and `DB_PASSWORD` are environment variables and are excluded from logs. |
 | Configuration is external. | Pass. API key, database, model name, and system prompt path are configuration. |
 | Database changes are Liquibase SQL changesets. | Pass. Formatted SQL changelog only. No XML changeset. |
 | Health endpoint. | Pass. Spring Boot Actuator health. |
 
-Post-design re-check: the data model, HTTP contract, and quickstart do not add a frontend, a second error shape, anonymous access to receipt creation, or stored photos. Gates still pass.
+Post-design re-check: the data model, HTTP contract, and quickstart do not add a frontend, a second error shape, anonymous access to transcription or receipt storage, or stored photos. Gates still pass.
 
 ## Project Structure
 
@@ -85,9 +85,11 @@ src/main/java/pl/tomaszko/cheapskountant/
 ├── receipt/
 │   ├── api/
 │   │   ├── ReceiptController.java
+│   │   ├── TranscriptionController.java
 │   │   └── ReceiptErrorHandler.java
 │   ├── application/
-│   │   └── CreateReceiptService.java
+│   │   ├── CreateReceiptService.java
+│   │   └── TranscribeReceiptService.java
 │   ├── transcription/
 │   │   └── ReceiptTranscriptionService.java
 │   └── persistence/
@@ -106,7 +108,7 @@ src/test/java/pl/tomaszko/cheapskountant/
 └── receipt/persistence/
 ```
 
-**Structure Decision**: One Maven module at the repository root. The web layer accepts the multipart request and maps errors. `CreateReceiptService` orders authorization outcomes, validation, transcription, and a single database transaction. `ReceiptTranscriptionService` is the only type that talks to Spring AI. Persistence maps the schema tables and does not see HTTP or the model client.
+**Structure Decision**: One Maven module at the repository root. `TranscriptionController` accepts the multipart images. `TranscribeReceiptService` validates those images and calls `ReceiptTranscriptionService`, which is the only type that talks to Spring AI, then returns the structured receipt with no id. `ReceiptController` accepts that JSON object. `CreateReceiptService` checks completeness and saves it in one database transaction. Persistence maps the schema tables and does not see HTTP or the model client.
 
 ## Complexity Tracking
 

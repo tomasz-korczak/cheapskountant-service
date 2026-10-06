@@ -25,10 +25,10 @@
 
 **Purpose**: Create the Spring Boot 4.1.1 / Java 23 project described in plan.md
 
-- [ ] T001 Create `pom.xml` with group `pl.tomaszko`, artifact `cheapskountant-service`, parent Spring Boot 4.1.1, Java release 23, Spring Boot repackage final name `cheapskountant-service`, and dependencies `spring-boot-starter-web`, `spring-boot-starter-validation`, `spring-boot-starter-data-jpa`, `spring-boot-starter-liquibase`, `spring-boot-starter-actuator`, Spring AI BOM 2.0.1, `spring-ai-starter-model-openai`, `spring-boot-starter-test`, and Testcontainers MariaDB. The runtime image is already defined in `Dockerfile` and expects `target/cheapskountant-service.jar`
-- [ ] T002 [P] Create `src/main/java/pl/tomaszko/cheapskountant/CheapskountantServiceApplication.java`
-- [ ] T003 [P] Create `src/main/resources/application.yaml` with `OPENROUTER_API_KEY`, `DB_CONNECTION`, `DB_USERNAME`, `DB_PASSWORD`, `API_KEY`, OpenRouter base URL `https://openrouter.ai/api/v1`, `app.transcription.model` default `google/gemini-2.5-flash`, a 60 second transcription budget, Liquibase changelog `classpath:db/changelog/db.changelog-master.sql`, `spring.jpa.hibernate.ddl-auto=validate`, and log file `logs/cheapskountant-service.log`
-- [ ] T004 [P] Copy `.external-resources/receipt-schema.json` to `src/main/resources/schemas/receipt-schema.json`
+- [X] T001 Create `pom.xml` with group `pl.tomaszko`, artifact `cheapskountant-service`, parent Spring Boot 4.1.1, Java release 23, Spring Boot repackage final name `cheapskountant-service`, and dependencies `spring-boot-starter-web`, `spring-boot-starter-validation`, `spring-boot-starter-data-jpa`, `spring-boot-starter-liquibase`, `spring-boot-starter-actuator`, Spring AI BOM 2.0.1, `spring-ai-starter-model-openai`, `spring-boot-starter-test`, and Testcontainers MariaDB. The runtime image is already defined in `Dockerfile` and expects `target/cheapskountant-service.jar`
+- [X] T002 [P] Create `src/main/java/pl/tomaszko/cheapskountant/CheapskountantServiceApplication.java`
+- [X] T003 [P] Create `src/main/resources/application.yaml` with `OPENROUTER_API_KEY`, `DB_CONNECTION`, `DB_USERNAME`, `DB_PASSWORD`, `API_KEY`, OpenRouter base URL `https://openrouter.ai/api/v1`, `app.transcription.model` default `google/gemini-2.5-flash`, a 60 second transcription budget, Liquibase changelog `classpath:db/changelog/db.changelog-master.sql`, `spring.jpa.hibernate.ddl-auto=validate`, and log file `logs/cheapskountant-service.log`
+- [X] T004 [P] Copy `.external-resources/receipt-schema.json` to `src/main/resources/schemas/receipt-schema.json`
 
 ---
 
@@ -38,14 +38,14 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T005 Create Liquibase formatted SQL changeset `001-create-receipt-tables` in `src/main/resources/db/changelog/db.changelog-master.sql` for every table, key, and timestamp in `specs/001-create-receipt/data-model.md`
-- [ ] T006 [P] Create JPA entities and `ReceiptRepository` for `receipt`, `seller`, `address`, `receipt_header`, `receipt_item`, `tax_summary`, `receipt_totals`, `payment`, `fiscal_data`, and `unparsed_line` in `src/main/java/pl/tomaszko/cheapskountant/receipt/persistence/`
-- [ ] T007 [P] Create the failure body with `reason` and `explanation` in `src/main/java/pl/tomaszko/cheapskountant/receipt/api/ReceiptFailure.java` and map it in `src/main/java/pl/tomaszko/cheapskountant/receipt/api/ReceiptErrorHandler.java`
-- [ ] T008 [P] Create `src/main/java/pl/tomaszko/cheapskountant/config/TranscriptionProperties.java` and the system prompt in `src/main/resources/prompts/receipt-transcription-system.st` using the transcription rules in `specs/001-create-receipt/research.md`
-- [ ] T009 [P] Create `src/main/java/pl/tomaszko/cheapskountant/config/SecurityConfig.java` so `POST /api/receipt` requires `Authorization: Bearer` matching `API_KEY` and `GET /actuator/health` is public
-- [ ] T035 [P] Write a failing-then-passing test that `GET /actuator/health` returns success without `API_KEY` in `src/test/java/pl/tomaszko/cheapskountant/config/HealthEndpointTest.java`
-- [ ] T010 [P] Create the OpenRouter `ChatClient` bean in `src/main/java/pl/tomaszko/cheapskountant/config/OpenRouterConfig.java`
-- [ ] T011 [P] Create `src/main/java/pl/tomaszko/cheapskountant/config/ModelCallLoggingAdvisor.java` to log the system prompt, tool definitions, user text, image count, media type, and byte size, plus the response text, and never log API keys, database passwords, or image bytes
+- [X] T005 Create Liquibase formatted SQL changeset `001-create-receipt-tables` in `src/main/resources/db/changelog/db.changelog-master.sql` for every table, key, and timestamp in `specs/001-create-receipt/data-model.md`
+- [X] T006 [P] Create JPA entities and `ReceiptRepository` for `receipt`, `seller`, `address`, `receipt_header`, `receipt_item`, `tax_summary`, `receipt_totals`, `payment`, `fiscal_data`, and `unparsed_line` in `src/main/java/pl/tomaszko/cheapskountant/receipt/persistence/`
+- [X] T007 [P] Create the failure body with `reason` and `explanation` in `src/main/java/pl/tomaszko/cheapskountant/receipt/api/ReceiptFailure.java` and map it in `src/main/java/pl/tomaszko/cheapskountant/receipt/api/ReceiptErrorHandler.java`
+- [X] T008 [P] Create `src/main/java/pl/tomaszko/cheapskountant/config/TranscriptionProperties.java` and the system prompt in `src/main/resources/prompts/receipt-transcription-system.st` using the transcription rules in `specs/001-create-receipt/research.md`
+- [X] T009 [P] Create `src/main/java/pl/tomaszko/cheapskountant/config/SecurityConfig.java` so `POST /api/receipt` and `POST /api/transcription` require `Authorization: Bearer` matching `API_KEY` and `GET /actuator/health` is public
+- [X] T035 [P] Write a failing-then-passing test that `GET /actuator/health` returns success without `API_KEY` in `src/test/java/pl/tomaszko/cheapskountant/config/HealthEndpointTest.java`
+- [X] T010 [P] Create the OpenRouter `ChatClient` bean in `src/main/java/pl/tomaszko/cheapskountant/config/OpenRouterConfig.java`
+- [X] T011 [P] Create `src/main/java/pl/tomaszko/cheapskountant/config/ModelCallLoggingAdvisor.java` to log the system prompt, tool definitions, user text, image count, media type, and byte size, plus the response text, and never log API keys, database passwords, or image bytes
 
 **Checkpoint**: Foundation ready. User story implementation can begin.
 
@@ -59,19 +59,19 @@
 
 ### Tests for User Story 1
 
-- [ ] T012 [P] [US1] Write failing transcription success tests in `src/test/java/pl/tomaszko/cheapskountant/receipt/transcription/ReceiptTranscriptionServiceTest.java`
-- [ ] T013 [P] [US1] Write failing save-and-return tests in `src/test/java/pl/tomaszko/cheapskountant/receipt/application/CreateReceiptServiceTest.java`
-- [ ] T014 [P] [US1] Write failing one-image and two-to-five-image HTTP 201 tests in `src/test/java/pl/tomaszko/cheapskountant/receipt/api/CreateReceiptControllerTest.java`
-- [ ] T015 [P] [US1] Write a failing MariaDB round-trip test in `src/test/java/pl/tomaszko/cheapskountant/receipt/persistence/ReceiptPersistenceTest.java`
+- [X] T012 [P] [US1] Write failing transcription success tests in `src/test/java/pl/tomaszko/cheapskountant/receipt/transcription/ReceiptTranscriptionServiceTest.java`
+- [X] T013 [P] [US1] Write failing save-and-return tests in `src/test/java/pl/tomaszko/cheapskountant/receipt/application/CreateReceiptServiceTest.java`
+- [X] T014 [P] [US1] Write failing one-image and two-to-five-image HTTP 201 tests in `src/test/java/pl/tomaszko/cheapskountant/receipt/api/CreateReceiptControllerTest.java`
+- [X] T015 [P] [US1] Write a failing MariaDB round-trip test in `src/test/java/pl/tomaszko/cheapskountant/receipt/persistence/ReceiptPersistenceTest.java`
 
 ### Implementation for User Story 1
 
-- [ ] T016 [P] [US1] Create the schema draft type without a database id in `src/main/java/pl/tomaszko/cheapskountant/receipt/transcription/ReceiptDraft.java`
-- [ ] T017 [P] [US1] Create the stored response type with `id` in `src/main/java/pl/tomaszko/cheapskountant/receipt/api/StoredReceiptResponse.java` matching `specs/001-create-receipt/contracts/create-receipt.openapi.yaml`
-- [ ] T018 [US1] Implement `src/main/java/pl/tomaszko/cheapskountant/receipt/transcription/ReceiptTranscriptionService.java` to send ordered images through `ChatClient`, use `src/main/resources/schemas/receipt-schema.json` with provider structured output, and default a missing media type to `image/jpeg`
-- [ ] T019 [US1] Implement `src/main/java/pl/tomaszko/cheapskountant/receipt/persistence/ReceiptMapper.java` to map a valid draft to the child rows in `data-model.md`, including joined file names and no image bytes
-- [ ] T020 [US1] Implement the successful transaction in `src/main/java/pl/tomaszko/cheapskountant/receipt/application/CreateReceiptService.java`
-- [ ] T021 [US1] Implement `POST /api/receipt` for multipart field `images` in `src/main/java/pl/tomaszko/cheapskountant/receipt/api/ReceiptController.java`
+- [X] T016 [P] [US1] Create the schema draft type without a database id in `src/main/java/pl/tomaszko/cheapskountant/receipt/transcription/ReceiptDraft.java`
+- [X] T017 [P] [US1] Create the stored response type with `id` in `src/main/java/pl/tomaszko/cheapskountant/receipt/api/StoredReceiptResponse.java` matching `specs/001-create-receipt/contracts/create-receipt.openapi.yaml`
+- [X] T018 [US1] Implement `src/main/java/pl/tomaszko/cheapskountant/receipt/transcription/ReceiptTranscriptionService.java` to send ordered images through `ChatClient`, use `src/main/resources/schemas/receipt-schema.json` with provider structured output, and default a missing media type to `image/jpeg`
+- [X] T019 [US1] Implement `src/main/java/pl/tomaszko/cheapskountant/receipt/persistence/ReceiptMapper.java` to map a valid draft to the child rows in `data-model.md`, including joined file names and no image bytes
+- [X] T020 [US1] Implement the successful transaction in `src/main/java/pl/tomaszko/cheapskountant/receipt/application/CreateReceiptService.java`
+- [X] T021 [US1] Implement `POST /api/receipt` to persist a JSON `StoredReceiptResponse` in `src/main/java/pl/tomaszko/cheapskountant/receipt/api/ReceiptController.java`. Image upload moved to `POST /api/transcription` in Phase 6.
 
 **Checkpoint**: User Story 1 is functional on its own for an authorized caller and valid photos.
 
@@ -85,15 +85,15 @@
 
 ### Tests for User Story 2
 
-- [ ] T022 [P] [US2] Write failing reason-mapping tests, including an invalid line item and a payment method outside cash, card, transfer, voucher, mobile, and other, in `src/test/java/pl/tomaszko/cheapskountant/receipt/application/CreateReceiptFailureTest.java`
-- [ ] T023 [P] [US2] Write failing HTTP tests for 422, 503, 504, and 500 in `src/test/java/pl/tomaszko/cheapskountant/receipt/api/ReceiptFailureControllerTest.java`
+- [X] T022 [P] [US2] Write failing reason-mapping tests, including an invalid line item and a payment method outside cash, card, transfer, voucher, mobile, and other, in `src/test/java/pl/tomaszko/cheapskountant/receipt/application/CreateReceiptFailureTest.java`
+- [X] T023 [P] [US2] Write failing HTTP tests for 422, 503, 504, and 500 in `src/test/java/pl/tomaszko/cheapskountant/receipt/api/ReceiptFailureControllerTest.java`
 
 ### Implementation for User Story 2
 
-- [ ] T024 [US2] Classify blank, unreadable, multi-receipt, non-object, incomplete, and provider or timeout failures in `src/main/java/pl/tomaszko/cheapskountant/receipt/transcription/ReceiptTranscriptionService.java`
-- [ ] T025 [US2] Before insert, reject a draft that lacks a complete line item (description, quantity greater than zero, unit price, line total, tax category), a complete tax summary entry, or a payment whose method is cash, card, transfer, voucher, mobile, or other; also reject a tax id that is not 10 digits, money that is not a two-fraction amount, a currency that is not three letters, a present BDO that is not 9 digits, or a present address missing street, postal code, city, or country code, in `src/main/java/pl/tomaszko/cheapskountant/receipt/application/CreateReceiptService.java`
-- [ ] T026 [US2] Roll back and return `storage failed` when save fails in `src/main/java/pl/tomaszko/cheapskountant/receipt/application/CreateReceiptService.java`
-- [ ] T027 [US2] Map `unreadable`, `incomplete`, `transcription unavailable`, and `storage failed` to HTTP 422, 503, 504, and 500 in `src/main/java/pl/tomaszko/cheapskountant/receipt/api/ReceiptErrorHandler.java`
+- [X] T024 [US2] Classify blank, unreadable, multi-receipt, non-object, incomplete, and provider or timeout failures in `src/main/java/pl/tomaszko/cheapskountant/receipt/transcription/ReceiptTranscriptionService.java`
+- [X] T025 [US2] Before insert, reject a draft that lacks a complete line item (description, quantity greater than zero, unit price, line total, tax category), a complete tax summary entry, or a payment whose method is cash, card, transfer, voucher, mobile, or other; also reject a tax id that is not 10 digits, money that is not a two-fraction amount, a currency that is not three letters, a present BDO that is not 9 digits, or a present address missing street, postal code, city, or country code, in `src/main/java/pl/tomaszko/cheapskountant/receipt/application/CreateReceiptService.java`
+- [X] T026 [US2] Roll back and return `storage failed` when save fails in `src/main/java/pl/tomaszko/cheapskountant/receipt/application/CreateReceiptService.java`
+- [X] T027 [US2] Map `unreadable`, `incomplete`, `transcription unavailable`, and `storage failed` to HTTP 422, 503, 504, and 500 in `src/main/java/pl/tomaszko/cheapskountant/receipt/api/ReceiptErrorHandler.java`
 
 **Checkpoint**: User Stories 1 and 2 both work. A failed transcription or save never leaves a receipt.
 
@@ -107,14 +107,14 @@
 
 ### Tests for User Story 3
 
-- [ ] T028 [P] [US3] Write failing submission-limit tests in `src/test/java/pl/tomaszko/cheapskountant/receipt/application/ReceiptSubmissionValidatorTest.java`
-- [ ] T029 [P] [US3] Write failing unauthorized HTTP tests in `src/test/java/pl/tomaszko/cheapskountant/receipt/api/UnauthorizedReceiptTest.java`
+- [X] T028 [P] [US3] Write failing submission-limit tests in `src/test/java/pl/tomaszko/cheapskountant/receipt/application/ReceiptSubmissionValidatorTest.java`
+- [X] T029 [P] [US3] Write failing unauthorized HTTP tests in `src/test/java/pl/tomaszko/cheapskountant/receipt/api/UnauthorizedReceiptTest.java`
 
 ### Implementation for User Story 3
 
-- [ ] T030 [US3] Implement the one-to-five image, 10 MB, declared-type, and missing-type rules in `src/main/java/pl/tomaszko/cheapskountant/receipt/application/ReceiptSubmissionValidator.java`
-- [ ] T031 [US3] Reject invalid submissions before transcription in `src/main/java/pl/tomaszko/cheapskountant/receipt/application/CreateReceiptService.java`
-- [ ] T032 [US3] Return `not authorized` from `src/main/java/pl/tomaszko/cheapskountant/config/SecurityConfig.java` without calling `ReceiptTranscriptionService`
+- [X] T030 [US3] Implement the one-to-five image, 10 MB, declared-type, and missing-type rules in `src/main/java/pl/tomaszko/cheapskountant/receipt/application/ReceiptSubmissionValidator.java`
+- [X] T031 [US3] Reject invalid submissions before transcription in `src/main/java/pl/tomaszko/cheapskountant/receipt/application/CreateReceiptService.java`
+- [X] T032 [US3] Return `not authorized` from `src/main/java/pl/tomaszko/cheapskountant/config/SecurityConfig.java` without calling `ReceiptTranscriptionService`
 
 **Checkpoint**: All three stories work. Invalid and unauthorized requests never reach the model.
 
@@ -124,9 +124,9 @@
 
 **Purpose**: Logging safety and the quickstart validation
 
-- [ ] T033 [P] Write failing-then-passing advisor tests in `src/test/java/pl/tomaszko/cheapskountant/config/ModelCallLoggingAdvisorTest.java` that require prompt and response logging and forbid API keys, database passwords, and image bytes
-- [ ] T034 Run `mvn test` and the manual checks in `specs/001-create-receipt/quickstart.md`
-- [ ] T036 Package `target/cheapskountant-service.jar` and build the image from `Dockerfile` using `eclipse-temurin:23.0.2_7-jre`
+- [X] T033 [P] Write failing-then-passing advisor tests in `src/test/java/pl/tomaszko/cheapskountant/config/ModelCallLoggingAdvisorTest.java` that require prompt and response logging and forbid API keys, database passwords, and image bytes
+- [X] T034 Run `mvn test` and the manual checks in `specs/001-create-receipt/quickstart.md`
+- [X] T036 Package `target/cheapskountant-service.jar` and build the image from `Dockerfile` using `eclipse-temurin:23.0.2_7-jre`
 
 ---
 
@@ -194,19 +194,31 @@ T017 StoredReceiptResponse.java
 3. Complete Phase 3: User Story 1.
 4. Stop and validate the independent test for User Story 1.
 
-User Story 1 alone stores a receipt. It does not yet refuse bad photos, outages, or unauthorized callers. Those are Stories 2 and 3.
+User Story 1 alone transcribes a receipt and stores nothing. Storage, failed photos, outages, and unauthorized callers are Stories 2, 3, and 4. Phase 6 is the current endpoint split.
 
 ### Incremental Delivery
 
 1. Setup and Foundational make the process, database, and model client ready.
-2. User Story 1 stores one receipt from one to five photos.
-3. User Story 2 stops bad transcriptions and failed saves from leaving rows.
-4. User Story 3 stops invalid files and unauthorized callers before the model is called.
-5. Polish confirms the log file is safe and `mvn test` passes.
+2. User Story 1 transcribes one receipt from one to five photos.
+3. User Story 2 stores that structured receipt and rolls back a failed save.
+4. User Story 3 stops unreadable photos and transcription outages from returning a receipt.
+5. User Story 4 stops invalid files and unauthorized callers before the model is called.
+6. Phase 6 keeps transcription and storage on separate endpoints. Polish confirms the log file is safe and `mvn test` passes.
 
 ### Parallel Team Strategy
 
 One developer should own `CreateReceiptService.java` and `ReceiptController.java` through Stories 1, 2, and 3, in that order. Tests in separate files can be written ahead of that owner. Entity, prompt, security, and logging files in Phase 2 can be split across people.
+
+---
+
+## Phase 6: Split transcription from storage
+
+**Purpose**: `POST /api/transcription` returns a structured receipt from images and stores nothing. `POST /api/receipt` accepts that object as JSON and only persists it.
+
+- [X] T037 Record the split in `specs/001-create-receipt/spec.md`, `plan.md`, `research.md`, `data-model.md`, `quickstart.md`, and `contracts/create-receipt.openapi.yaml`
+- [X] T038 Add `POST /api/transcription` in `src/main/java/pl/tomaszko/cheapskountant/receipt/api/TranscriptionController.java` and `src/main/java/pl/tomaszko/cheapskountant/receipt/application/TranscribeReceiptService.java`
+- [X] T039 Change `POST /api/receipt` to accept and persist `StoredReceiptResponse` only in `src/main/java/pl/tomaszko/cheapskountant/receipt/api/ReceiptController.java` and `src/main/java/pl/tomaszko/cheapskountant/receipt/application/CreateReceiptService.java`
+- [X] T040 Require `API_KEY` for both endpoints in `src/main/java/pl/tomaszko/cheapskountant/config/SecurityConfig.java`
 
 ---
 

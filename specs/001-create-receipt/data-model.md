@@ -25,7 +25,7 @@ Root of one stored fiscal receipt.
 |--------|----------|-------|
 | id | yes | Primary key. Returned as `id`. |
 | document_type | yes | Always `fiscal_receipt`. |
-| source_file_name | no | Original file names joined in upload order. Omitted when every part is nameless. |
+| source_file_name | no | File names joined in upload order by transcription into `source.fileName`, then stored from the receipt body. Omitted when every part is nameless. |
 | source_raw_text | no | Model text only. |
 | created_at, updated_at | yes | |
 
@@ -188,7 +188,7 @@ Insert runs in one transaction only after all of the following hold:
 - Optional objects that are absent produce no child row.
 - Line totals, tax, and amount due are not required to match each other.
 
-If any required check fails, the reason is `incomplete` and the transaction does not start. If the model output is not a receipt object, the reason is `unreadable`.
+Transcription applies the same checks to the model output and returns `incomplete` or `unreadable` without inserting a row. Receipt storage applies them to the JSON body. If any required check fails, the reason is `incomplete` and the transaction does not start. If the body is not a fiscal receipt object, the reason is `unreadable`.
 
 ## State
 

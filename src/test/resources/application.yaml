@@ -1,0 +1,12 @@
+spring:
+  datasource:
+    url: jdbc:mariadb://127.0.0.1:1/cheapskountant
+    username: test
+    password: db-password-secret
+  ai:
+    openai:
+      api-key: sk-test-openrouter-key
+      base-url: http://127.0.0.1:9
+
+app:
+  api-key: test-api-key

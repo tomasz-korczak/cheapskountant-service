@@ -30,9 +30,9 @@ Each part is an image. The media type is taken from the upload when it is `image
 
 ## Several images, one receipt
 
-**Decision**: `POST /api/receipt` accepts multipart field `images`, from one to five file parts, each at most 10 MB. Parts are pages of one Polish fiscal receipt, in order. Zero parts, an empty part, a non-image declared type, a part over 10 MB, or a sixth image is `invalid submission` and the model is not called. A part with no media type is sent as `image/jpeg`.
+**Decision**: `POST /api/transcription` accepts multipart field `images`, from one to five file parts, each at most 10 MB. Parts are pages of one Polish fiscal receipt, in order. Zero parts, an empty part, a non-image declared type, a part over 10 MB, or a sixth image is `invalid submission` and the model is not called. A part with no media type is sent as `image/jpeg`. The response is the structured receipt with no id. This endpoint does not insert a row. `POST /api/receipt` accepts that object as JSON and only persists it.
 
-**Rationale**: A long receipt may need more than one photo, and the accepted limit is five. If the transcription cannot represent the upload as exactly one fiscal receipt, the reason is `unreadable` and nothing is stored.
+**Rationale**: A long receipt may need more than one photo, and the accepted limit is five. If the transcription cannot represent the upload as exactly one fiscal receipt, the reason is `unreadable` and nothing is stored. Storage is a separate call so a caller can keep the transcribed object without writing it, and can store a receipt without calling the model again.
 
 **Alternatives considered**: Stitching images into one JPEG before the call loses page boundaries and adds an image library. Rejecting every multi-image request contradicts the planning input.
 
@@ -62,7 +62,7 @@ The template must tell the model to:
 
 **Alternatives considered**: Hibernate `ddl-auto=update` would bypass Liquibase. Storing money as `VARCHAR` would match the schema pattern literally and weaken numeric queries. One wide table would bury repeating line items.
 
-Photos are not inserted. Original file names, when present, are joined in order into `source.fileName`. Missing names are skipped. `source.rawText` stores only text the model returned.
+Photos are not inserted. Transcription joins original file names, when present, in order into `source.fileName` on the returned object. Missing names are skipped. `source.rawText` is text the model returned. Receipt storage persists `source.fileName` and `source.rawText` from the submitted object.
 
 ## Logging
 
@@ -74,7 +74,7 @@ Photos are not inserted. Original file names, when present, are joined in order 
 
 ## Authorization
 
-**Decision**: `/api/receipt` requires header `Authorization: Bearer <API_KEY>`, where `API_KEY` is an environment variable. A missing or wrong key returns `not authorized` and does not call the model or the database. There is no user table. `/actuator/health` is public.
+**Decision**: `POST /api/transcription` and `POST /api/receipt` require header `Authorization: Bearer <API_KEY>`, where `API_KEY` is an environment variable. A missing or wrong key returns `not authorized` and does not call the model or the database. There is no user table. `/actuator/health` is public.
 
 **Rationale**: The constitution requires authentication unless an endpoint is explicitly public. The spec refuses anonymous receipt creation and does not define accounts. A shared key matches the single shared ledger.
 
@@ -86,14 +86,15 @@ Photos are not inserted. Original file names, when present, are joined in order 
 
 | Condition | Reason | HTTP |
 |-----------|--------|------|
-| No image, empty image, unsupported declared type, image over 10 MB, more than five images | invalid submission | 400 |
-| Missing or wrong API key | not authorized | 401 |
-| Blank, unreadable, not one Polish fiscal receipt, or a response that is not the receipt object | unreadable | 422 |
+| Transcription: no image, empty image, unsupported declared type, image over 10 MB, more than five images | invalid submission | 400 |
+| Receipt storage: missing or unreadable JSON body | invalid submission | 400 |
+| Missing or wrong API key on either endpoint | not authorized | 401 |
+| Blank, unreadable, not one Polish fiscal receipt, or a model response that is not the receipt object | unreadable | 422 |
 | Receipt object missing required parts, including a tax summary with no entries, or containing a malformed required value | incomplete | 422 |
 | OpenRouter error or the 60 second budget expires | transcription unavailable | 503, or 504 on timeout |
-| Database rollback after a valid transcription | storage failed | 500 |
+| Database rollback while storing a valid receipt | storage failed | 500 |
 
-Validation and authorization happen before the model call. A failure does not insert rows.
+Image validation and authorization happen before the model call. Transcription does not insert rows. Receipt storage does not call the model. A failure does not insert rows.
 
 **Rationale**: The six spec reasons stay stable for clients. Storage failure is separate so an outage is not reported as a bad photo. HTTP codes distinguish bad input, refusal, and dependency failure.
 

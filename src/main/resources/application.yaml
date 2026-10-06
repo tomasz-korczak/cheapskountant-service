@@ -1,0 +1,53 @@
+spring:
+  application:
+    name: cheapskountant-service
+  datasource:
+    url: ${DB_CONNECTION}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate.dialect: pl.tomaszko.cheapskountant.config.AppMariaDbDialect
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.sql
+  servlet:
+    multipart:
+      max-file-size: 11MB
+      max-request-size: 55MB
+  ai:
+    openai:
+      api-key: ${OPENROUTER_API_KEY}
+      base-url: https://openrouter.ai/api/v1
+      chat:
+        options:
+          model: google/gemini-2.5-flash
+          timeout: 60s
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: false
+
+app:
+  api-key: ${API_KEY}
+  transcription:
+    model: google/gemini-2.5-flash
+    timeout: 60s
+    system-prompt: classpath:prompts/receipt-transcription-system.st
+
+logging:
+  file:
+    name: logs/cheapskountant-service.log
+  level:
+    org.springframework.ai.openai: WARN

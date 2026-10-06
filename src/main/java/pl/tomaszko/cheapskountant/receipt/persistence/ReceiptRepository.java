@@ -1,0 +1,6 @@
+package pl.tomaszko.cheapskountant.receipt.persistence;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface ReceiptRepository extends JpaRepository<ReceiptEntity, Long> {
+}

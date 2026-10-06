@@ -6,7 +6,7 @@
 
 **Status**: Draft
 
-**Input**: User description: "Expense-tracking service. The primary capability accepts a receipt photo, transcribes it into a structured receipt with automated transcription, stores that receipt only when transcription succeeds, and returns the stored receipt. When transcription does not succeed, the caller receives an error and nothing is stored."
+**Input**: User description: "Expense-tracking service. Transcription and storage are separate. `POST /api/transcription` accepts receipt photos, transcribes them into a structured receipt, and returns that object without storing it. `POST /api/receipt` accepts that structured receipt and only persists it. When transcription or storage does not succeed, the caller receives an error and nothing is stored."
 
 ## Clarifications
 
@@ -20,94 +20,116 @@
 - Q: What should happen when an uploaded image has no declared media type? → A: Accept it and treat it as JPEG.
 - Q: Is a receipt incomplete when the tax summary has no entries? → A: At least one tax summary entry is required.
 
+### Session 2026-10-06
+
+- Q: Should one request both transcribe the photos and store the receipt? → A: No. `POST /api/transcription` accepts one to five images and returns the structured receipt without an id and without storing it. `POST /api/receipt` accepts that same object as JSON and only persists it, assigning the id.
+
 ## User Scenarios & Testing *(mandatory)*
 
-### User Story 1 - Store a transcribed receipt (Priority: P1)
+### User Story 1 - Transcribe receipt photos (Priority: P1)
 
-An authorized caller submits one to five photos of one Polish fiscal receipt, in page order. The service transcribes those photos into one structured receipt, stores that receipt, and returns the same structured receipt to the caller.
+An authorized caller submits one to five photos of one Polish fiscal receipt, in page order, to `POST /api/transcription`. The service transcribes those photos into one structured receipt and returns that receipt. Nothing is stored, and the response has no id.
 
-**Why this priority**: This is the only capability that turns a receipt photo into a retained expense record. Without it, the service does not deliver expense tracking.
+**Why this priority**: Transcription is what turns a photo into a receipt the caller can keep. Storage is a separate step.
 
-**Independent Test**: Submit one clear photo of a complete Polish fiscal receipt, and submit two to five ordered photos of one complete receipt. Each response is the stored receipt, including seller, receipt identifiers, at least one line item, at least one tax summary entry, totals, and at least one payment.
+**Independent Test**: Submit one clear photo of a complete Polish fiscal receipt, and submit two to five ordered photos of one complete receipt. Each response is the transcribed receipt, including seller, receipt identifiers, at least one line item, at least one tax summary entry, totals, and at least one payment. No receipt row is created.
 
 **Acceptance Scenarios**:
 
-1. **Given** an authorized caller and one readable photo of one complete Polish fiscal receipt, **When** the caller submits that photo, **Then** the service stores one receipt and returns that stored receipt.
-2. **Given** an authorized caller and two to five ordered photos of one complete Polish fiscal receipt, **When** the caller submits those photos, **Then** the service stores one receipt and returns that stored receipt.
-3. **Given** a stored receipt returned to the caller, **When** the caller inspects it, **Then** it contains the transcribed seller, receipt header, at least one line item, at least one tax summary entry, totals, and at least one payment, and it matches what was retained.
-4. **Given** a receipt photo set whose transcription includes optional details such as addresses, fiscal device data, or lines that could not be placed in a field, **When** all required receipt parts are present, **Then** the service stores the receipt and includes those optional details in the returned receipt.
+1. **Given** an authorized caller and one readable photo of one complete Polish fiscal receipt, **When** the caller submits that photo to transcription, **Then** the service returns that structured receipt and stores nothing.
+2. **Given** an authorized caller and two to five ordered photos of one complete Polish fiscal receipt, **When** the caller submits those photos to transcription, **Then** the service returns one structured receipt and stores nothing.
+3. **Given** a transcription response, **When** the caller inspects it, **Then** it contains the transcribed seller, receipt header, at least one line item, at least one tax summary entry, totals, and at least one payment, and it has no id.
+4. **Given** a receipt photo set whose transcription includes optional details such as addresses, fiscal device data, or lines that could not be placed in a field, **When** all required receipt parts are present, **Then** the response includes those optional details and stores nothing.
 
 ---
 
-### User Story 2 - Reject a photo that cannot become a receipt (Priority: P1)
+### User Story 2 - Store a structured receipt (Priority: P1)
 
-An authorized caller submits a photo that cannot be turned into a complete receipt. The caller receives a fixed reason and a short explanation, and no receipt is stored.
+An authorized caller sends a structured receipt to `POST /api/receipt`. The service stores that receipt and returns the same receipt with an id assigned by the service. This endpoint does not accept photos and does not call transcription.
 
-**Why this priority**: A failed transcription must never create an expense record. Storing a partial or invented receipt would corrupt the expense history.
+**Why this priority**: A transcribed receipt becomes an expense record only when it is stored.
 
-**Independent Test**: Submit an unreadable image, a receipt missing a required part or tax summary entry, a transcription that does not finish, and a save that fails. The reasons are "unreadable", "incomplete", "transcription unavailable", and "storage failed", and no receipt remains stored.
+**Independent Test**: Submit the JSON body returned by transcription. The response is HTTP 201 with the same receipt fields plus an id. A second identical submission stores a separate receipt.
 
 **Acceptance Scenarios**:
 
-1. **Given** an authorized caller and a photo that is unreadable, blank, or not a receipt, **When** the caller submits that photo, **Then** the service returns the reason "unreadable" and a short explanation, and no receipt is stored.
-2. **Given** an authorized caller and a photo of a receipt that is missing one or more required parts, has no tax summary entry, or has a malformed required value, **When** the caller submits that photo, **Then** the service returns the reason "incomplete" and a short explanation, and no receipt is stored.
+1. **Given** an authorized caller and a complete structured receipt, **When** the caller submits that object, **Then** the service stores one receipt and returns it with an id.
+2. **Given** a stored receipt returned to the caller, **When** the caller inspects it, **Then** it matches the submitted seller, receipt header, line items, tax summary, totals, payments, and optional details, plus the assigned id.
+3. **Given** a complete structured receipt and a failure while saving it, **When** the save does not finish, **Then** the service returns the reason "storage failed" and a short explanation, and no receipt remains stored.
+4. **Given** an authorized caller and a structured receipt that is missing a required part, has no tax summary entry, or has a malformed required value, **When** the caller submits that object, **Then** the service returns the reason "incomplete" and a short explanation, and no receipt is stored.
+
+---
+
+### User Story 3 - Reject a photo that cannot become a receipt (Priority: P1)
+
+An authorized caller submits a photo that cannot be turned into a complete receipt. Transcription returns a fixed reason and a short explanation, and no receipt is stored.
+
+**Why this priority**: A failed transcription must not be presented as a receipt the caller can store.
+
+**Independent Test**: Submit an unreadable image, a receipt missing a required part or tax summary entry, and a transcription that does not finish. The reasons are "unreadable", "incomplete", and "transcription unavailable", and no receipt is stored.
+
+**Acceptance Scenarios**:
+
+1. **Given** an authorized caller and a photo that is unreadable, blank, or not a receipt, **When** the caller submits that photo to transcription, **Then** the service returns the reason "unreadable" and a short explanation, and no receipt is stored.
+2. **Given** an authorized caller and a photo of a receipt that is missing one or more required parts, has no tax summary entry, or has a malformed required value, **When** the caller submits that photo to transcription, **Then** the service returns the reason "incomplete" and a short explanation, and no receipt is stored.
 3. **Given** transcription is unavailable or does not finish in time, **When** the caller submits a photo, **Then** the service returns the reason "transcription unavailable" and a short explanation, and no receipt is stored.
-4. **Given** a complete transcription and a failure while saving it, **When** the save does not finish, **Then** the service returns the reason "storage failed" and a short explanation, and no receipt remains stored.
 
 ---
 
-### User Story 3 - Reject an invalid or unauthorized submission (Priority: P2)
+### User Story 4 - Reject an invalid or unauthorized submission (Priority: P2)
 
-A caller submits something the service should not attempt to transcribe, or a caller who is not authorized attempts to submit a photo. The service refuses the submission before creating a receipt.
+A caller submits something transcription should not attempt, sends a receipt body that cannot be read, or calls either endpoint without authorization. The service refuses the request before creating a receipt.
 
-**Why this priority**: Invalid files and unauthorized use must be stopped, but the product value still depends on the successful transcription path above.
+**Why this priority**: Invalid files, unreadable JSON, and unauthorized use must be stopped before any receipt is stored.
 
-**Independent Test**: Submit an empty file, an unsupported file, an oversized image, or a request from an unauthorized caller, and confirm each is refused with the matching reason and that no receipt is stored.
+**Independent Test**: Submit an empty file, an unsupported file, an oversized image, a receipt request without a JSON body, or a request from an unauthorized caller. Each is refused with the matching reason and no receipt is stored.
 
 **Acceptance Scenarios**:
 
-1. **Given** an authorized caller and no image, an empty image, or a file that is not an accepted image, **When** the caller submits it, **Then** the service returns the reason "invalid submission" and a short explanation, does not attempt transcription, and does not store a receipt.
-2. **Given** an authorized caller and an image larger than the accepted size, **When** the caller submits it, **Then** the service returns the reason "invalid submission" and a short explanation, does not attempt transcription, and does not store a receipt.
-3. **Given** a caller who is not authorized, **When** that caller submits a receipt photo, **Then** the service returns the reason "not authorized" and a short explanation, does not attempt transcription, and does not store a receipt.
-4. **Given** an authorized caller and six or more images, **When** the caller submits them, **Then** the service returns the reason "invalid submission" and a short explanation, does not attempt transcription, and does not store a receipt.
+1. **Given** an authorized caller and no image, an empty image, or a file that is not an accepted image, **When** the caller submits it to transcription, **Then** the service returns the reason "invalid submission" and a short explanation, does not attempt transcription, and does not store a receipt.
+2. **Given** an authorized caller and an image larger than the accepted size, **When** the caller submits it to transcription, **Then** the service returns the reason "invalid submission" and a short explanation, does not attempt transcription, and does not store a receipt.
+3. **Given** a caller who is not authorized, **When** that caller calls transcription or receipt storage, **Then** the service returns the reason "not authorized" and a short explanation, does not attempt transcription, and does not store a receipt.
+4. **Given** an authorized caller and six or more images, **When** the caller submits them to transcription, **Then** the service returns the reason "invalid submission" and a short explanation, does not attempt transcription, and does not store a receipt.
+5. **Given** an authorized caller and a receipt request with no JSON body, **When** the caller submits it, **Then** the service returns the reason "invalid submission" and a short explanation, and does not store a receipt.
 
 ### Edge Cases
 
-- A photo contains more than one receipt. The caller receives the reason "unreadable" and nothing is stored, because one submission captures exactly one receipt.
-- One image in a two-to-five image submission is blank or unreadable. The caller receives the reason "unreadable" and nothing is stored.
-- A photo is a receipt from outside the supported Polish fiscal receipt format. The caller receives the reason "unreadable" and nothing is stored.
-- Line totals, tax amounts, and the amount due do not reconcile. If all required parts are present and amounts are valid currency amounts, the receipt is stored as transcribed. Correcting arithmetic is outside this capability.
-- The same photo is submitted twice. Each successful submission stores a separate receipt. Detecting duplicates is outside this capability.
-- The photo file name is missing. Transcription and storage still proceed; the file name is omitted.
+- A photo contains more than one receipt. Transcription returns the reason "unreadable" and nothing is stored, because one submission captures exactly one receipt.
+- One image in a two-to-five image submission is blank or unreadable. Transcription returns the reason "unreadable" and nothing is stored.
+- A photo is a receipt from outside the supported Polish fiscal receipt format. Transcription returns the reason "unreadable" and nothing is stored.
+- Line totals, tax amounts, and the amount due do not reconcile. If all required parts are present and amounts are valid currency amounts, transcription returns the receipt and storage keeps it as submitted. Correcting arithmetic is outside this capability.
+- The same structured receipt is stored twice. Each successful store creates a separate receipt. Detecting duplicates is outside this capability.
+- The photo file name is missing. Transcription still returns the receipt; the file name is omitted. Storage keeps the file name only when the submitted object includes one.
 - Optional fields that are absent on the paper receipt are omitted rather than filled with placeholders.
 - Amounts that are not valid currency amounts, or a seller tax identifier that is not a 10-digit Polish tax identifier, produce the reason "incomplete". Nothing is stored.
-- A submission contains six or more images. The caller receives the reason "invalid submission" and nothing is stored.
-- An image has no declared media type. It is accepted and treated as a JPEG. A declared type other than JPEG, PNG, or WebP is "invalid submission".
+- A transcription submission contains six or more images. The caller receives the reason "invalid submission" and nothing is stored.
+- An image has no declared media type. Transcription accepts it and treats it as a JPEG. A declared type other than JPEG, PNG, or WebP is "invalid submission".
 - The tax summary is missing or has no entries. The caller receives the reason "incomplete" and nothing is stored.
-- Saving a valid transcription fails. The caller receives the reason "storage failed", and no partial receipt remains stored.
+- Saving a valid structured receipt fails. The caller receives the reason "storage failed", and no partial receipt remains stored.
+- An id sent to receipt storage is ignored. The service assigns the stored id.
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001**: The service MUST accept one to five receipt photos of one receipt from an authorized caller and return the stored structured receipt when transcription succeeds.
-- **FR-002**: The service MUST transcribe the photos, in submission order, into one Polish fiscal receipt before anything is stored.
-- **FR-003**: The service MUST store a receipt only after transcription produces all required parts: seller trade name and tax identifier, receipt number, issue date and time, currency, at least one line item, at least one tax summary entry, totals, and at least one payment.
-- **FR-004**: The service MUST return the same receipt that was stored, including any optional details that were transcribed.
-- **FR-005**: Each stored receipt MUST have a unique identifier assigned by the service.
-- **FR-006**: The service MUST retain the stored receipt after the submission completes. The original photo MUST NOT be retained.
-- **FR-007**: When any submitted photo is blank or unreadable, or the photos are not exactly one Polish fiscal receipt, the service MUST return the reason "unreadable" and a short explanation, and MUST NOT store a receipt.
-- **FR-008**: When a required part is missing or a required value is malformed, the service MUST return the reason "incomplete" and a short explanation, and MUST NOT store a receipt.
-- **FR-009**: When transcription is unavailable or does not complete within the allowed time, the service MUST return the reason "transcription unavailable" and a short explanation, and MUST NOT store a receipt.
-- **FR-010**: The service MUST refuse a submission that has no image, an empty image, a declared type other than JPEG, PNG, or WebP, an image above 10 MB, or more than five images. The reason MUST be "invalid submission". The service MUST NOT attempt transcription and MUST NOT store a receipt.
-- **FR-011**: The service MUST accept JPEG, PNG, and WebP images. An image with no declared media type MUST be accepted and treated as JPEG. Each image MUST be at most 10 MB.
-- **FR-012**: Callers who are not authorized MUST be refused with the reason "not authorized" and a short explanation. The service MUST NOT attempt transcription, and no receipt MUST be stored.
-- **FR-013**: Every failure MUST include exactly one fixed reason and a short explanation of why the receipt was not stored. The reason MUST be one of: invalid submission, not authorized, unreadable, incomplete, transcription unavailable, or storage failed.
+- **FR-001**: `POST /api/transcription` MUST accept one to five receipt photos of one receipt from an authorized caller and return the structured receipt when transcription succeeds. It MUST NOT store a receipt.
+- **FR-002**: Transcription MUST read the photos, in submission order, into one Polish fiscal receipt. The returned object MUST omit the id.
+- **FR-003**: `POST /api/receipt` MUST accept a structured receipt as JSON and MUST store it only when all required parts are present: seller trade name and tax identifier, receipt number, issue date and time, currency, at least one line item, at least one tax summary entry, totals, and at least one payment. This endpoint MUST NOT accept photos and MUST NOT call transcription.
+- **FR-004**: Receipt storage MUST return the same receipt that was stored, including any optional details from the submitted object, plus the assigned id.
+- **FR-005**: Each stored receipt MUST have a unique identifier assigned by the service. An id in the storage request MUST be ignored.
+- **FR-006**: The service MUST retain the stored receipt after storage completes. The original photo MUST NOT be retained. Transcription MUST return the structured receipt only.
+- **FR-007**: When any submitted photo is blank or unreadable, or the photos are not exactly one Polish fiscal receipt, transcription MUST return the reason "unreadable" and a short explanation, and MUST NOT store a receipt.
+- **FR-008**: When a required part is missing or a required value is malformed, transcription and receipt storage MUST each return the reason "incomplete" and a short explanation, and MUST NOT store a receipt.
+- **FR-009**: When transcription is unavailable or does not complete within the allowed time, transcription MUST return the reason "transcription unavailable" and a short explanation, and MUST NOT store a receipt.
+- **FR-010**: Transcription MUST refuse a submission that has no image, an empty image, a declared type other than JPEG, PNG, or WebP, an image above 10 MB, or more than five images. The reason MUST be "invalid submission". Transcription MUST NOT be attempted and a receipt MUST NOT be stored. Receipt storage MUST refuse a request that has no JSON receipt body with the reason "invalid submission".
+- **FR-011**: Transcription MUST accept JPEG, PNG, and WebP images. An image with no declared media type MUST be accepted and treated as JPEG. Each image MUST be at most 10 MB.
+- **FR-012**: Callers who are not authorized MUST be refused on both endpoints with the reason "not authorized" and a short explanation. Transcription MUST NOT be attempted, and no receipt MUST be stored.
+- **FR-013**: Every failure MUST include exactly one fixed reason and a short explanation. The reason MUST be one of: invalid submission, not authorized, unreadable, incomplete, transcription unavailable, or storage failed.
 - **FR-014**: A stored line item MUST include description, quantity greater than zero, unit price, line total, and tax category.
 - **FR-015**: A stored payment MUST include a payment method and an amount. Allowed methods are cash, card, transfer, voucher, mobile, and other.
 - **FR-016**: Currency amounts MUST be expressed as values with two fractional digits. Currency MUST be a three-letter currency code.
-- **FR-017**: The seller tax identifier MUST be a 10-digit Polish tax identifier when the receipt is stored.
-- **FR-018**: When a valid transcription cannot be saved, the service MUST return the reason "storage failed" and MUST leave no stored receipt.
+- **FR-017**: The seller tax identifier MUST be a 10-digit Polish tax identifier when the receipt is stored or returned from transcription.
+- **FR-018**: When a valid structured receipt cannot be saved, receipt storage MUST return the reason "storage failed" and MUST leave no stored receipt.
 
 ### Key Entities
 
@@ -124,23 +146,23 @@ A caller submits something the service should not attempt to transcribe, or a ca
 
 ### Measurable Outcomes
 
-- **SC-001**: An authorized caller can turn one to five clear photos of one complete receipt into one stored receipt in a single submission, without typing receipt fields.
-- **SC-002**: The caller receives either the stored receipt or a fixed failure reason with a short explanation within 60 seconds of submitting one to five photos.
-- **SC-003**: 100% of refused or failed submissions leave no stored receipt.
-- **SC-004**: 100% of submissions from unauthorized callers are refused and leave no stored receipt.
-- **SC-005**: Every returned receipt includes seller, receipt header, at least one line item, at least one tax summary entry, totals, and at least one payment.
+- **SC-001**: An authorized caller can turn one to five clear photos of one complete receipt into one structured receipt in a single transcription request, without typing receipt fields, and can store that object in a separate request.
+- **SC-002**: The caller receives either the transcribed receipt or a fixed failure reason with a short explanation within 60 seconds of submitting one to five photos. Storage returns the stored receipt or a fixed failure reason without calling transcription.
+- **SC-003**: 100% of refused or failed transcription and storage requests leave no stored receipt. A successful transcription also leaves no stored receipt.
+- **SC-004**: 100% of requests from unauthorized callers are refused on both endpoints and leave no stored receipt.
+- **SC-005**: Every transcribed or stored receipt includes seller, receipt header, at least one line item, at least one tax summary entry, totals, and at least one payment. Only the stored receipt includes an id.
 
 ## Assumptions
 
-- This capability covers only creating one receipt from one to five photos of that receipt. Listing, viewing, editing, deleting, categorizing, and exporting expenses are separate capabilities.
+- This capability covers transcribing one receipt from one to five photos, and storing one structured receipt. The caller performs those as two requests. Listing, viewing, editing, deleting, categorizing, and exporting expenses are separate capabilities.
 - Supported documents are Polish fiscal receipts. Invoices, foreign receipts, and multi-receipt photos are refused.
 - Transcription is performed by an external language-model capability. The provider is not chosen by this specification. The service depends on that capability being available.
-- The original photo is used only to produce the transcription and is then discarded. Only the structured receipt is retained.
+- The original photo is used only to produce the transcription and is then discarded. Only a receipt submitted to storage is retained.
 - Callers must already be authorized. How a caller signs in is outside this capability. This submission capability is not available to anonymous callers.
 - Accepted declared image types are JPEG, PNG, and WebP. An image with no declared type is treated as JPEG. Each image is at most 10 MB. A submission contains one to five images.
-- Transcription is allowed up to 60 seconds. If it does not finish, the submission fails and nothing is stored.
-- Duplicate receipts are not detected. Submitting the same photo again stores another receipt.
+- Transcription is allowed up to 60 seconds. If it does not finish, transcription fails and nothing is stored.
+- Duplicate receipts are not detected. Storing the same structured receipt again stores another receipt.
 - Arithmetic reconciliation between line items, tax, and totals is not required for acceptance.
 - Acceptance of this capability is the scenario tests in this specification. A percentage accuracy target is not a release gate.
 - All stored receipts belong to one shared ledger. A receipt does not record who submitted it. Separate personal ledgers and sharing are outside this capability.
-- No screen or page is part of this capability. A separate client submits the photo and receives the receipt or the failure explanation.
+- No screen or page is part of this capability. A separate client submits the photo to transcription, then submits the returned object to storage, and receives either the receipt or the failure explanation.
