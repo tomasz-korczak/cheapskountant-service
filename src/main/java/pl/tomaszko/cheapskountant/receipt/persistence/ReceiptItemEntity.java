@@ -46,4 +46,10 @@ public class ReceiptItemEntity extends Timestamped {
 
     @Column(name = "tax_category", nullable = false, length = 32)
     String taxCategory;
+
+    @Column(name = "discount_description", length = 1024)
+    String discountDescription;
+
+    @Column(name = "discount_total", precision = 14, scale = 2)
+    BigDecimal discountTotal;
 }

@@ -14,6 +14,7 @@ public record StoredReceiptResponse(
         ReceiptDraft.Seller seller,
         ReceiptDraft.ReceiptInfo receipt,
         List<ReceiptDraft.Item> items,
+        ReceiptDraft.Discount discountSummary,
         List<ReceiptDraft.TaxLine> taxSummary,
         ReceiptDraft.Totals totals,
         List<ReceiptDraft.Payment> payments,

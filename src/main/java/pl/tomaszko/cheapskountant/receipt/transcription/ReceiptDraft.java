@@ -13,6 +13,7 @@ public record ReceiptDraft(
         Seller seller,
         ReceiptInfo receipt,
         List<Item> items,
+        Discount discountSummary,
         List<TaxLine> taxSummary,
         Totals totals,
         List<Payment> payments,
@@ -49,7 +50,12 @@ public record ReceiptDraft(
             String unit,
             String unitPrice,
             String total,
-            String taxCategory) {
+            String taxCategory,
+            Discount discount) {
+    }
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record Discount(String description, String total) {
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)

@@ -49,6 +49,7 @@ class ReceiptPersistenceTest {
                 draft.seller(),
                 draft.receipt(),
                 draft.items(),
+                draft.discountSummary(),
                 draft.taxSummary(),
                 draft.totals(),
                 draft.payments(),
@@ -73,5 +74,30 @@ class ReceiptPersistenceTest {
         assertThat(loaded.taxSummaries).hasSize(1);
         assertThat(loaded.payments.get(0).method).isEqualTo("card");
         assertThat(loaded.header.currency).isEqualTo("PLN");
+        assertThat(loaded.items.get(0).discountDescription).isNull();
+        assertThat(loaded.items.get(0).discountTotal).isNull();
+        assertThat(loaded.discountSummary).isNull();
+    }
+
+    @Test
+    void roundTripsItemDiscountAndDiscountSummary() {
+        ReceiptEntity saved = receiptRepository.saveAndFlush(receiptMapper.toEntity(ReceiptFixtures.discountedDraft()));
+        entityManager.clear();
+
+        ReceiptEntity loaded = receiptRepository.findById(saved.id).orElseThrow();
+        assertThat(loaded.items).extracting(item -> item.description)
+                .containsExactly("NapLiptIcTeMIX1,5L", "ChipsyLay soveB110g", "But Plastik kaucja");
+        assertThat(loaded.items.get(1).lineTotal).isEqualByComparingTo("26.07");
+        assertThat(loaded.items.get(1).discountDescription).isEqualTo("OPUST");
+        assertThat(loaded.items.get(1).discountTotal).isEqualByComparingTo("-8.69");
+        assertThat(loaded.items.get(0).discountTotal).isNull();
+        assertThat(loaded.items.get(2).itemType).isEqualTo("packaging");
+        assertThat(loaded.discountSummary.description).isEqualTo("OPUSTY ŁĄCZNIE");
+        assertThat(loaded.discountSummary.total).isEqualByComparingTo("-8.69");
+        assertThat(loaded.discountSummary.createdAt).isEqualTo(loaded.discountSummary.updatedAt);
+
+        var response = receiptMapper.toResponse(loaded);
+        assertThat(response.items().get(1).discount().total()).isEqualTo("-8.69");
+        assertThat(response.discountSummary().description()).isEqualTo("OPUSTY ŁĄCZNIE");
     }
 }

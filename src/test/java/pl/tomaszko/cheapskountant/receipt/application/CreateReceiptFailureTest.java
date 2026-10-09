@@ -64,7 +64,8 @@ class CreateReceiptFailureTest {
                 draft.source(),
                 draft.seller(),
                 draft.receipt(),
-                List.of(new ReceiptDraft.Item("Milk", null, BigDecimal.ONE, null, "4.00", null, "A")),
+                List.of(new ReceiptDraft.Item("Milk", null, BigDecimal.ONE, null, "4.00", null, "A", null)),
+                draft.discountSummary(),
                 draft.taxSummary(),
                 draft.totals(),
                 draft.payments(),
@@ -82,6 +83,7 @@ class CreateReceiptFailureTest {
                 draft.seller(),
                 draft.receipt(),
                 draft.items(),
+                draft.discountSummary(),
                 draft.taxSummary(),
                 draft.totals(),
                 List.of(new ReceiptDraft.Payment("bitcoin", "4.00", null)),
@@ -99,11 +101,74 @@ class CreateReceiptFailureTest {
                 new ReceiptDraft.Seller("Sklep", null, "ABC", null, null, null),
                 draft.receipt(),
                 draft.items(),
+                draft.discountSummary(),
                 draft.taxSummary(),
                 draft.totals(),
                 draft.payments(),
                 draft.fiscalData(),
                 draft.unparsedLines()), ReceiptFailureReason.INCOMPLETE);
+    }
+
+    @Test
+    void nonNegativeItemDiscountIsIncomplete() {
+        ReceiptDraft draft = ReceiptFixtures.validDraft();
+        assertFailure(new ReceiptDraft(
+                draft.documentType(),
+                draft.source(),
+                draft.seller(),
+                draft.receipt(),
+                List.of(new ReceiptDraft.Item(
+                        "Milk",
+                        null,
+                        BigDecimal.ONE,
+                        null,
+                        "4.00",
+                        "4.00",
+                        "A",
+                        new ReceiptDraft.Discount("OPUST", "1.00"))),
+                null,
+                draft.taxSummary(),
+                draft.totals(),
+                draft.payments(),
+                draft.fiscalData(),
+                draft.unparsedLines()), ReceiptFailureReason.INCOMPLETE);
+        verify(receiptRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void blankDiscountSummaryIsIncomplete() {
+        ReceiptDraft draft = ReceiptFixtures.validDraft();
+        assertFailure(new ReceiptDraft(
+                draft.documentType(),
+                draft.source(),
+                draft.seller(),
+                draft.receipt(),
+                draft.items(),
+                new ReceiptDraft.Discount("  ", "-8.69"),
+                draft.taxSummary(),
+                draft.totals(),
+                draft.payments(),
+                draft.fiscalData(),
+                draft.unparsedLines()), ReceiptFailureReason.INCOMPLETE);
+        verify(receiptRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void zeroDiscountSummaryIsIncomplete() {
+        ReceiptDraft draft = ReceiptFixtures.validDraft();
+        assertFailure(new ReceiptDraft(
+                draft.documentType(),
+                draft.source(),
+                draft.seller(),
+                draft.receipt(),
+                draft.items(),
+                new ReceiptDraft.Discount("OPUSTY ŁĄCZNIE", "-0.00"),
+                draft.taxSummary(),
+                draft.totals(),
+                draft.payments(),
+                draft.fiscalData(),
+                draft.unparsedLines()), ReceiptFailureReason.INCOMPLETE);
+        verify(receiptRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -135,6 +200,7 @@ class CreateReceiptFailureTest {
                 request.seller(),
                 request.receipt(),
                 request.items(),
+                request.discountSummary(),
                 request.taxSummary(),
                 request.totals(),
                 request.payments(),

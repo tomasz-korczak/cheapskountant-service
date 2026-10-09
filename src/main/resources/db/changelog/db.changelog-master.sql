@@ -140,3 +140,25 @@ CREATE TABLE unparsed_line (
     CONSTRAINT uq_unparsed_line_line UNIQUE (receipt_id, line_no),
     CONSTRAINT fk_unparsed_line_receipt FOREIGN KEY (receipt_id) REFERENCES receipt (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--changeset cheapskountant:002-receipt-discounts
+ALTER TABLE receipt_item
+    ADD COLUMN discount_description VARCHAR(1024) NULL,
+    ADD COLUMN discount_total DECIMAL(14, 2) NULL,
+    ADD CONSTRAINT ck_receipt_item_discount CHECK (
+        (discount_description IS NULL AND discount_total IS NULL)
+        OR (discount_description IS NOT NULL AND CHAR_LENGTH(TRIM(discount_description)) > 0 AND discount_total < 0)
+    );
+
+CREATE TABLE discount_summary (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    receipt_id BIGINT NOT NULL,
+    description VARCHAR(1024) NOT NULL,
+    total DECIMAL(14, 2) NOT NULL,
+    created_at DATETIME(3) NOT NULL,
+    updated_at DATETIME(3) NOT NULL,
+    CONSTRAINT pk_discount_summary PRIMARY KEY (id),
+    CONSTRAINT uq_discount_summary_receipt UNIQUE (receipt_id),
+    CONSTRAINT fk_discount_summary_receipt FOREIGN KEY (receipt_id) REFERENCES receipt (id) ON DELETE CASCADE,
+    CONSTRAINT ck_discount_summary_total CHECK (total < 0 AND CHAR_LENGTH(TRIM(description)) > 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

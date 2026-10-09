@@ -41,6 +41,9 @@ public class ReceiptEntity extends Timestamped {
     @OrderBy("lineNo ASC")
     List<ReceiptItemEntity> items = new ArrayList<>();
 
+    @OneToOne(mappedBy = "receipt", cascade = CascadeType.ALL, orphanRemoval = true)
+    DiscountSummaryEntity discountSummary;
+
     @OneToMany(mappedBy = "receipt", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("lineNo ASC")
     List<TaxSummaryEntity> taxSummaries = new ArrayList<>();

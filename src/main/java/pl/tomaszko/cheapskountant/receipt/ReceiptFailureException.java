@@ -1,5 +1,10 @@
 package pl.tomaszko.cheapskountant.receipt;
 
+import lombok.Getter;
+import lombok.experimental.Accessors;
+
+@Getter
+@Accessors(fluent = true)
 public class ReceiptFailureException extends RuntimeException {
 
     private final ReceiptFailureReason reason;
@@ -11,16 +16,8 @@ public class ReceiptFailureException extends RuntimeException {
         this.timeout = timeout;
     }
 
-    public ReceiptFailureReason reason() {
-        return reason;
-    }
-
     public String explanation() {
         return getMessage();
-    }
-
-    public boolean timeout() {
-        return timeout;
     }
 
     public static ReceiptFailureException invalidSubmission(String explanation) {

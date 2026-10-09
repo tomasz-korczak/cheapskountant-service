@@ -54,7 +54,19 @@ public class ReceiptMapper {
             row.unitPrice = money(item.unitPrice());
             row.lineTotal = money(item.total());
             row.taxCategory = item.taxCategory();
+            if (item.discount() != null) {
+                row.discountDescription = item.discount().description();
+                row.discountTotal = money(item.discount().total());
+            }
             receipt.items.add(row);
+        }
+
+        if (draft.discountSummary() != null) {
+            DiscountSummaryEntity summary = new DiscountSummaryEntity();
+            summary.receipt = receipt;
+            summary.description = draft.discountSummary().description();
+            summary.total = money(draft.discountSummary().total());
+            receipt.discountSummary = summary;
         }
 
         int taxNo = 1;
@@ -121,6 +133,7 @@ public class ReceiptMapper {
                 receipt.seller(),
                 receipt.receipt(),
                 receipt.items(),
+                receipt.discountSummary(),
                 receipt.taxSummary(),
                 receipt.totals(),
                 receipt.payments(),
@@ -139,6 +152,7 @@ public class ReceiptMapper {
                 draft.seller(),
                 draft.receipt(),
                 draft.items(),
+                draft.discountSummary(),
                 draft.taxSummary(),
                 draft.totals(),
                 draft.payments(),
@@ -154,6 +168,7 @@ public class ReceiptMapper {
                 seller(receipt.seller),
                 header(receipt.header),
                 items(receipt.items),
+                discount(receipt.discountSummary),
                 taxLines(receipt.taxSummaries),
                 totals(receipt.totals),
                 payments(receipt.payments),
@@ -219,9 +234,24 @@ public class ReceiptMapper {
                     item.unit,
                     money(item.unitPrice),
                     money(item.lineTotal),
-                    item.taxCategory));
+                    item.taxCategory,
+                    discount(item.discountDescription, item.discountTotal)));
         }
         return result;
+    }
+
+    private ReceiptDraft.Discount discount(DiscountSummaryEntity summary) {
+        if (summary == null) {
+            return null;
+        }
+        return new ReceiptDraft.Discount(summary.description, money(summary.total));
+    }
+
+    private ReceiptDraft.Discount discount(String description, BigDecimal total) {
+        if (description == null || total == null) {
+            return null;
+        }
+        return new ReceiptDraft.Discount(description, money(total));
     }
 
     private List<ReceiptDraft.TaxLine> taxLines(List<TaxSummaryEntity> lines) {

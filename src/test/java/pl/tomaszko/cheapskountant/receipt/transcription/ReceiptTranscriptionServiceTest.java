@@ -54,6 +54,25 @@ class ReceiptTranscriptionServiceTest {
         assertThat(sent.getUserMessage().getMedia().get(1).getMimeType().toString()).isEqualTo("image/png");
         assertThat(sent.getOptions()).isInstanceOf(OpenAiChatOptions.class);
         assertThat(((OpenAiChatOptions) sent.getOptions()).getResponseFormat().getJsonSchema()).contains("fiscal_receipt");
+        assertThat(sent.getSystemMessage().getText()).contains("discountSummary");
+        assertThat(((OpenAiChatOptions) sent.getOptions()).getResponseFormat().getJsonSchema()).contains("discountSummary");
+    }
+
+    @Test
+    void readsItemDiscountAndDiscountSummary() {
+        ReceiptTranscriptionService service = service(prompt -> json(ReceiptFixtures.DISCOUNTED_JSON), Duration.ofSeconds(5));
+
+        ReceiptDraft draft = service.transcribe(List.of(image()));
+
+        assertThat(draft.items()).extracting(ReceiptDraft.Item::description)
+                .containsExactly("NapLiptIcTeMIX1,5L", "ChipsyLay soveB110g", "But Plastik kaucja");
+        assertThat(draft.items().get(1).discount().description()).isEqualTo("OPUST");
+        assertThat(draft.items().get(1).discount().total()).isEqualTo("-8.69");
+        assertThat(draft.items().get(1).quantity()).isEqualByComparingTo("3");
+        assertThat(draft.items().get(1).unitPrice()).isEqualTo("8.69");
+        assertThat(draft.items().get(0).discount()).isNull();
+        assertThat(draft.discountSummary().description()).isEqualTo("OPUSTY ŁĄCZNIE");
+        assertThat(draft.discountSummary().total()).isEqualTo("-8.69");
     }
 
     @Test

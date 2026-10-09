@@ -194,8 +194,9 @@ components:
       description: |
         receipt-schema.json with an added id.
         Required groups are documentType, seller, receipt, items, taxSummary,
-        totals, and payments. Optional groups are source, fiscalData, and
+        totals, and payments.         Optional groups are source, discountSummary, fiscalData, and
         unparsedLines. Money values are strings with two fractional digits.
+        An item may include one discount. discountSummary is the receipt discount total.
       required: [documentType, seller, receipt, items, taxSummary, totals, payments]
       properties:
         id:
@@ -217,6 +218,8 @@ components:
           minItems: 1
           items:
             $ref: '#/components/schemas/LineItem'
+        discountSummary:
+          $ref: '#/components/schemas/Discount'
         taxSummary:
           type: array
           minItems: 1
@@ -313,6 +316,22 @@ components:
           $ref: '#/components/schemas/Money'
         taxCategory:
           type: string
+        discount:
+          $ref: '#/components/schemas/Discount'
+    Discount:
+      type: object
+      additionalProperties: false
+      required: [description, total]
+      properties:
+        description:
+          type: string
+          minLength: 1
+        total:
+          $ref: '#/components/schemas/NegativeMoney'
+    NegativeMoney:
+      type: string
+      description: Currency amount strictly less than zero, with two fractional digits.
+      pattern: '^-(?:0*[1-9][0-9]*\.[0-9]{2}|0\.[0-9][1-9]|0\.[1-9][0-9])$'
     TaxSummaryEntry:
       type: object
       additionalProperties: false

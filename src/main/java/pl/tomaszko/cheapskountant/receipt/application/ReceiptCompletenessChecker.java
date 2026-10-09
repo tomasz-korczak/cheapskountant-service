@@ -29,6 +29,7 @@ public class ReceiptCompletenessChecker {
         checkSeller(draft.seller());
         checkHeader(draft.receipt());
         checkItems(draft.items());
+        checkDiscount(draft.discountSummary(), "The discount summary is incomplete.");
         checkTaxSummary(draft.taxSummary());
         checkTotals(draft.totals());
         checkPayments(draft.payments());
@@ -86,6 +87,16 @@ public class ReceiptCompletenessChecker {
             if (item.itemType() != null && !ITEM_TYPES.contains(item.itemType())) {
                 throw ReceiptFailureException.incomplete("A line item is incomplete.");
             }
+            checkDiscount(item.discount(), "An item discount is incomplete.");
+        }
+    }
+
+    private void checkDiscount(ReceiptDraft.Discount discount, String message) {
+        if (discount == null) {
+            return;
+        }
+        if (blank(discount.description()) || !negativeMoney(discount.total())) {
+            throw ReceiptFailureException.incomplete(message);
         }
     }
 
@@ -125,6 +136,10 @@ public class ReceiptCompletenessChecker {
 
     private boolean money(String value) {
         return value != null && MONEY.matcher(value).matches();
+    }
+
+    private boolean negativeMoney(String value) {
+        return money(value) && new BigDecimal(value).compareTo(BigDecimal.ZERO) < 0;
     }
 
     private boolean blank(String value) {

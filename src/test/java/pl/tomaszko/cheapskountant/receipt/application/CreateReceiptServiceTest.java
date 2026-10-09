@@ -58,6 +58,7 @@ class CreateReceiptServiceTest {
                 draft.seller(),
                 draft.receipt(),
                 draft.items(),
+                draft.discountSummary(),
                 draft.taxSummary(),
                 draft.totals(),
                 draft.payments(),
@@ -75,6 +76,34 @@ class CreateReceiptServiceTest {
         assertThat(response.totals().grossAmount()).isEqualTo("4.00");
         assertThat(response.payments()).extracting(payment -> payment.method()).containsExactly("card");
         assertThat(response.source().fileName()).isEqualTo("page-1.jpg, page-2.jpg");
+        assertThat(response.discountSummary()).isNull();
+        verify(transactionManager).commit(any());
+    }
+
+    @Test
+    void savesAnItemDiscountAndDiscountSummary() throws Exception {
+        when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
+        when(receiptRepository.saveAndFlush(any())).thenAnswer(invocation -> {
+            ReceiptEntity entity = invocation.getArgument(0);
+            Field id = ReceiptEntity.class.getDeclaredField("id");
+            id.setAccessible(true);
+            id.set(entity, 16L);
+            return entity;
+        });
+
+        StoredReceiptResponse response = service.create(ReceiptFixtures.withoutId(ReceiptFixtures.discountedDraft()));
+
+        assertThat(response.id()).isEqualTo(16L);
+        assertThat(response.items()).extracting(ReceiptDraft.Item::description)
+                .containsExactly("NapLiptIcTeMIX1,5L", "ChipsyLay soveB110g", "But Plastik kaucja");
+        assertThat(response.items().get(0).discount()).isNull();
+        assertThat(response.items().get(1).total()).isEqualTo("26.07");
+        assertThat(response.items().get(1).discount().description()).isEqualTo("OPUST");
+        assertThat(response.items().get(1).discount().total()).isEqualTo("-8.69");
+        assertThat(response.items().get(2).itemType()).isEqualTo("packaging");
+        assertThat(response.items().get(2).discount()).isNull();
+        assertThat(response.discountSummary().description()).isEqualTo("OPUSTY ŁĄCZNIE");
+        assertThat(response.discountSummary().total()).isEqualTo("-8.69");
         verify(transactionManager).commit(any());
     }
 }

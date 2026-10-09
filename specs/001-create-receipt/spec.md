@@ -136,7 +136,7 @@ A caller submits something transcription should not attempt, sends a receipt bod
 - **Receipt**: One stored Polish fiscal receipt. It has a service-assigned identifier, a seller, receipt header, one or more line items, a tax summary, totals, and one or more payments. It may also include source file name, raw transcribed text, addresses, fiscal device details, and lines that could not be placed in a field.
 - **Seller**: The business on the receipt, identified by trade name and Polish tax identifier. It may include a legal name, BDO number, business address, and registered address.
 - **Receipt header**: Receipt number, date and time of issue, and currency. It may include an order number.
-- **Line item**: A product, service, packaging charge, or other charge, with description, quantity, unit price, line total, and tax category. Unit of measure is optional.
+- **Line item**: A product, service, packaging charge, or other charge, with description, quantity, unit price, line total, and tax category. Unit of measure is optional. An optional discount on that item is defined in Receipt Discounts.
 - **Tax summary entry**: One tax category with its rate, taxable sales, and tax amount. A stored receipt has at least one entry.
 - **Totals**: Total tax, gross amount, and amount due.
 - **Payment**: How the receipt was paid, with method and amount. A transaction identifier is optional.

@@ -10,6 +10,9 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -25,13 +28,10 @@ public class SecurityConfig {
         return new ApiKeyFilter(apiKey);
     }
 
+    @RequiredArgsConstructor(access = AccessLevel.PACKAGE)
     static final class ApiKeyFilter extends OncePerRequestFilter {
 
         private final String apiKey;
-
-        ApiKeyFilter(String apiKey) {
-            this.apiKey = apiKey;
-        }
 
         @Override
         protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)

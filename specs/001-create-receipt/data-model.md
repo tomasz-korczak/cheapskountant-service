@@ -1,6 +1,6 @@
 # Data Model: Create Receipt from Photo
 
-Source of the field set: `.external-resources/receipt-schema.json`.
+Source of the field set: `.external-resources/receipt-schema.json`. Item discounts and the receipt discount summary are added in `specs/002-receipt-discounts/data-model.md`.
 
 The model response and the HTTP success body follow that schema. The HTTP body adds `id`. Database ids, foreign keys, `created_at`, and `updated_at` are not sent to the model and are not returned except for the root `id`.
 

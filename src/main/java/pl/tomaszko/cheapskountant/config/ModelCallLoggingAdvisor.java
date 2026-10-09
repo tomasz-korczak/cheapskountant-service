@@ -4,8 +4,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
@@ -24,9 +24,8 @@ import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
 
 @Component
+@Slf4j
 public class ModelCallLoggingAdvisor implements CallAdvisor {
-
-    private static final Logger log = LoggerFactory.getLogger(ModelCallLoggingAdvisor.class);
 
     private final List<String> secrets;
 

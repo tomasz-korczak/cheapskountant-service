@@ -87,10 +87,12 @@
             "unit": { "type": "string" },
             "unitPrice": { "$ref": "#/$defs/money" },
             "total": { "$ref": "#/$defs/money" },
-            "taxCategory": { "type": "string" }
+            "taxCategory": { "type": "string" },
+            "discount": { "$ref": "#/$defs/discount" }
           }
         }
       },
+      "discountSummary": { "$ref": "#/$defs/discount" },
       "taxSummary": {
         "type": "array",
         "items": {
@@ -168,6 +170,19 @@
       "money": {
         "type": "string",
         "pattern": "^-?[0-9]+\\.[0-9]{2}$"
+      },
+      "negativeMoney": {
+        "type": "string",
+        "pattern": "^-(?:0*[1-9][0-9]*\\.[0-9]{2}|0\\.[0-9][1-9]|0\\.[1-9][0-9])$"
+      },
+      "discount": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["description", "total"],
+        "properties": {
+          "description": { "type": "string", "minLength": 1 },
+          "total": { "$ref": "#/$defs/negativeMoney" }
+        }
       },
       "address": {
         "type": "object",
