@@ -7,14 +7,31 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import pl.tomaszko.cheapskountant.expense.persistence.ExpenseCategoryEntity;
+import pl.tomaszko.cheapskountant.expense.persistence.ExpenseCategoryRepository;
+import pl.tomaszko.cheapskountant.receipt.ReceiptFailureException;
 import pl.tomaszko.cheapskountant.receipt.SubmittedImage;
 import pl.tomaszko.cheapskountant.receipt.api.StoredReceiptResponse;
 import pl.tomaszko.cheapskountant.receipt.transcription.ReceiptDraft;
 
 @Component
 public class ReceiptMapper {
+
+    private final CategoryLookup categories;
+
+    public ReceiptMapper() {
+        this.categories = name -> new ExpenseCategoryEntity(name);
+    }
+
+    @Autowired
+    public ReceiptMapper(ExpenseCategoryRepository categories) {
+        this.categories = name -> categories.findByName(name)
+                .filter(found -> name.equals(found.name()))
+                .orElseThrow(() -> ReceiptFailureException.incomplete("A line item category is not recognized."));
+    }
 
     public ReceiptEntity toEntity(ReceiptDraft draft) {
         ReceiptEntity receipt = new ReceiptEntity();
@@ -54,6 +71,7 @@ public class ReceiptMapper {
             row.unitPrice = money(item.unitPrice());
             row.lineTotal = money(item.total());
             row.taxCategory = item.taxCategory();
+            row.category = categories.resolve(item.category());
             if (item.discount() != null) {
                 row.discountDescription = item.discount().description();
                 row.discountTotal = money(item.discount().total());
@@ -235,6 +253,7 @@ public class ReceiptMapper {
                     money(item.unitPrice),
                     money(item.lineTotal),
                     item.taxCategory,
+                    item.category.name(),
                     discount(item.discountDescription, item.discountTotal)));
         }
         return result;
@@ -311,5 +330,10 @@ public class ReceiptMapper {
 
     private String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value;
+    }
+
+    @FunctionalInterface
+    private interface CategoryLookup {
+        ExpenseCategoryEntity resolve(String name);
     }
 }

@@ -72,7 +72,8 @@
             "quantity",
             "unitPrice",
             "total",
-            "taxCategory"
+            "taxCategory",
+            "category"
           ],
           "properties": {
             "description": { "type": "string" },
@@ -88,6 +89,7 @@
             "unitPrice": { "$ref": "#/$defs/money" },
             "total": { "$ref": "#/$defs/money" },
             "taxCategory": { "type": "string" },
+            "category": { "type": "string", "minLength": 1 },
             "discount": { "$ref": "#/$defs/discount" }
           }
         }

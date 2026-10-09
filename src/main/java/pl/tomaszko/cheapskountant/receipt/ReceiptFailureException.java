@@ -57,10 +57,10 @@ public class ReceiptFailureException extends RuntimeException {
     }
 
     public static ReceiptFailureException storageFailed(Throwable cause) {
-        return new ReceiptFailureException(
-                ReceiptFailureReason.STORAGE_FAILED,
-                "The receipt could not be saved.",
-                false,
-                cause);
+        return storageFailed("The receipt could not be saved.", cause);
+    }
+
+    public static ReceiptFailureException storageFailed(String explanation, Throwable cause) {
+        return new ReceiptFailureException(ReceiptFailureReason.STORAGE_FAILED, explanation, false, cause);
     }
 }

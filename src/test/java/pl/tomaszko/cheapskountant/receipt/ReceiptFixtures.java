@@ -32,7 +32,8 @@ public final class ReceiptFixtures {
                   "quantity": 1,
                   "unitPrice": "4.00",
                   "total": "4.00",
-                  "taxCategory": "A"
+                  "taxCategory": "A",
+                  "category": "Unknown"
                 }
               ],
               "taxSummary": [
@@ -72,7 +73,8 @@ public final class ReceiptFixtures {
                   "quantity": 1,
                   "unitPrice": "5.99",
                   "total": "5.99",
-                  "taxCategory": "C"
+                  "taxCategory": "C",
+                  "category": "Unknown"
                 },
                 {
                   "description": "ChipsyLay soveB110g",
@@ -80,6 +82,7 @@ public final class ReceiptFixtures {
                   "unitPrice": "8.69",
                   "total": "26.07",
                   "taxCategory": "C",
+                  "category": "Unknown",
                   "discount": {
                     "description": "OPUST",
                     "total": "-8.69"
@@ -91,7 +94,8 @@ public final class ReceiptFixtures {
                   "quantity": 1,
                   "unitPrice": "0.50",
                   "total": "0.50",
-                  "taxCategory": "C"
+                  "taxCategory": "C",
+                  "category": "Unknown"
                 }
               ],
               "discountSummary": {
@@ -101,6 +105,7 @@ public final class ReceiptFixtures {
               "taxSummary": [
                 {
                   "taxCategory": "C",
+                  "category": "Unknown",
                   "taxRate": 23,
                   "taxableSales": "23.37",
                   "taxAmount": "1.11"
@@ -139,7 +144,7 @@ public final class ReceiptFixtures {
                 new ReceiptDraft.Source(null, "PARAGON FISKALNY"),
                 new ReceiptDraft.Seller("Sklep", null, "1234567890", null, null, null),
                 new ReceiptDraft.ReceiptInfo("R1", OffsetDateTime.parse("2024-05-01T12:30:00Z"), "PLN", null),
-                List.of(new ReceiptDraft.Item("Milk", null, BigDecimal.ONE, null, "4.00", "4.00", "A", null)),
+                List.of(new ReceiptDraft.Item("Milk", null, BigDecimal.ONE, null, "4.00", "4.00", "A", "Unknown", null)),
                 null,
                 List.of(new ReceiptDraft.TaxLine("A", new BigDecimal("23"), "3.25", "0.75")),
                 new ReceiptDraft.Totals("0.75", "4.00", "4.00"),
@@ -155,7 +160,7 @@ public final class ReceiptFixtures {
                 new ReceiptDraft.Seller("BIEDRONKA", null, "7791011327", null, null, null),
                 new ReceiptDraft.ReceiptInfo("499752", OffsetDateTime.parse("2026-09-29T20:02:00Z"), "PLN", null),
                 List.of(
-                        new ReceiptDraft.Item("NapLiptIcTeMIX1,5L", null, BigDecimal.ONE, null, "5.99", "5.99", "C", null),
+                        new ReceiptDraft.Item("NapLiptIcTeMIX1,5L", null, BigDecimal.ONE, null, "5.99", "5.99", "C", "Unknown", null),
                         new ReceiptDraft.Item(
                                 "ChipsyLay soveB110g",
                                 null,
@@ -164,8 +169,9 @@ public final class ReceiptFixtures {
                                 "8.69",
                                 "26.07",
                                 "C",
+                                "Unknown",
                                 new ReceiptDraft.Discount("OPUST", "-8.69")),
-                        new ReceiptDraft.Item("But Plastik kaucja", "packaging", BigDecimal.ONE, null, "0.50", "0.50", "C", null)),
+                        new ReceiptDraft.Item("But Plastik kaucja", "packaging", BigDecimal.ONE, null, "0.50", "0.50", "C", "Unknown", null)),
                 new ReceiptDraft.Discount("OPUSTY ŁĄCZNIE", "-8.69"),
                 List.of(new ReceiptDraft.TaxLine("C", new BigDecimal("23"), "23.37", "1.11")),
                 new ReceiptDraft.Totals("1.11", "23.37", "23.87"),

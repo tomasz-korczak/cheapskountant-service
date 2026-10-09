@@ -71,6 +71,8 @@ class ReceiptPersistenceTest {
         assertThat(loaded.seller.taxId).isEqualTo("1234567890");
         assertThat(loaded.items.get(0).lineNo).isEqualTo(1);
         assertThat(loaded.items.get(0).description).isEqualTo("Milk");
+        assertThat(loaded.items.get(0).category.name()).isEqualTo("Unknown");
+        assertThat(receiptMapper.toResponse(loaded).items().get(0).category()).isEqualTo("Unknown");
         assertThat(loaded.taxSummaries).hasSize(1);
         assertThat(loaded.payments.get(0).method).isEqualTo("card");
         assertThat(loaded.header.currency).isEqualTo("PLN");

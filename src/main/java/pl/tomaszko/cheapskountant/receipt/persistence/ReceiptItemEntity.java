@@ -11,6 +11,8 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
+import pl.tomaszko.cheapskountant.expense.persistence.ExpenseCategoryEntity;
+
 @Entity
 @Table(name = "receipt_item")
 public class ReceiptItemEntity extends Timestamped {
@@ -46,6 +48,10 @@ public class ReceiptItemEntity extends Timestamped {
 
     @Column(name = "tax_category", nullable = false, length = 32)
     String taxCategory;
+
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "category_id", nullable = false)
+    ExpenseCategoryEntity category;
 
     @Column(name = "discount_description", length = 1024)
     String discountDescription;

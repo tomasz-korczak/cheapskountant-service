@@ -7,6 +7,7 @@ import java.util.regex.Pattern;
 
 import org.springframework.stereotype.Component;
 
+import pl.tomaszko.cheapskountant.expense.HouseholdCategories;
 import pl.tomaszko.cheapskountant.receipt.ReceiptFailureException;
 import pl.tomaszko.cheapskountant.receipt.transcription.ReceiptDraft;
 
@@ -81,7 +82,8 @@ public class ReceiptCompletenessChecker {
                     || item.quantity().compareTo(BigDecimal.ZERO) <= 0
                     || !money(item.unitPrice())
                     || !money(item.total())
-                    || blank(item.taxCategory())) {
+                    || blank(item.taxCategory())
+                    || !HouseholdCategories.receipt(item.category())) {
                 throw ReceiptFailureException.incomplete("A line item is incomplete.");
             }
             if (item.itemType() != null && !ITEM_TYPES.contains(item.itemType())) {

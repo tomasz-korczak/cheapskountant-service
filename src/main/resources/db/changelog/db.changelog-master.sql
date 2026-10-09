@@ -162,3 +162,70 @@ CREATE TABLE discount_summary (
     CONSTRAINT fk_discount_summary_receipt FOREIGN KEY (receipt_id) REFERENCES receipt (id) ON DELETE CASCADE,
     CONSTRAINT ck_discount_summary_total CHECK (total < 0 AND CHAR_LENGTH(TRIM(description)) > 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--changeset cheapskountant:003-expense-categories
+CREATE TABLE expense_category (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    name VARCHAR(50) NOT NULL,
+    created_at DATETIME(3) NOT NULL,
+    updated_at DATETIME(3) NOT NULL,
+    CONSTRAINT pk_expense_category PRIMARY KEY (id),
+    CONSTRAINT uq_expense_category_name UNIQUE (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO expense_category (name, created_at, updated_at) VALUES
+('Jedzenie', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000'),
+('Jedzenie na mieście', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000'),
+('Browar', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000'),
+('Kwiatki', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000'),
+('Bilet ZTM', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000'),
+('Wyjazdy', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000'),
+('Telefon', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000'),
+('Kino', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000'),
+('Słodycze', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000'),
+('Lekarstwa/suplementy', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000'),
+('Przybory toal.', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000'),
+('Alkohol inny', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000'),
+('Lekarze', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000'),
+('Łachy', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000'),
+('Multimedia', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000'),
+('Inne wydatki', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000'),
+('Materiały biurowe', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000'),
+('Pieniądze, po prostu…', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000'),
+('Książki i gazety', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000'),
+('Rachunki / podatki', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000'),
+('Przybory czyszczące', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000'),
+('Naczynia,kuchnia', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000'),
+('Narzędzia/mat. Eksploatacyjne', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000'),
+('Numizmatyka', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000'),
+('Elektronika', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000'),
+('Dzieciaki', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000'),
+('Samochód', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000'),
+('Strzelectwo', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000'),
+('Ofiary/darowizny', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000'),
+('Przesyłki pocztowe/kurier', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000'),
+('Oszczędności', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000'),
+('Dom/remonty', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000'),
+('Opakowania (torby, butelki)', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000'),
+('Fermentacja alkoholowa', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000'),
+('Unknown', '2026-10-10 00:00:00.000', '2026-10-10 00:00:00.000');
+
+CREATE TABLE expense (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    amount DECIMAL(8, 2) NOT NULL,
+    payment_date DATE NOT NULL,
+    category_id BIGINT NOT NULL,
+    currency VARCHAR(3) NOT NULL,
+    description VARCHAR(100) NULL,
+    created_at DATETIME(3) NOT NULL,
+    updated_at DATETIME(3) NOT NULL,
+    CONSTRAINT pk_expense PRIMARY KEY (id),
+    CONSTRAINT fk_expense_category FOREIGN KEY (category_id) REFERENCES expense_category (id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE INDEX idx_expense_payment_date ON expense (payment_date);
+
+ALTER TABLE receipt_item ADD COLUMN category_id BIGINT NULL;
+UPDATE receipt_item SET category_id = (SELECT id FROM expense_category WHERE name = 'Unknown');
+ALTER TABLE receipt_item MODIFY category_id BIGINT NOT NULL;
+ALTER TABLE receipt_item ADD CONSTRAINT fk_receipt_item_category FOREIGN KEY (category_id) REFERENCES expense_category (id) ON DELETE RESTRICT;

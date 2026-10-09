@@ -100,7 +100,7 @@ public class ReceiptTranscriptionService {
                     })
                     .call()
                     .content();
-            ReceiptDraft draft = readDraft(content);
+            ReceiptDraft draft = assignUnknownCategories(readDraft(content));
             completenessChecker.check(draft);
             return draft;
         }
@@ -110,6 +110,41 @@ public class ReceiptTranscriptionService {
         catch (RuntimeException ex) {
             throw mapFailure(ex);
         }
+    }
+
+    private ReceiptDraft assignUnknownCategories(ReceiptDraft draft) {
+        if (draft.items() == null) {
+            return draft;
+        }
+        List<ReceiptDraft.Item> items = new java.util.ArrayList<>();
+        for (ReceiptDraft.Item item : draft.items()) {
+            if (item == null) {
+                items.add(null);
+                continue;
+            }
+            items.add(new ReceiptDraft.Item(
+                    item.description(),
+                    item.itemType(),
+                    item.quantity(),
+                    item.unit(),
+                    item.unitPrice(),
+                    item.total(),
+                    item.taxCategory(),
+                    "Unknown",
+                    item.discount()));
+        }
+        return new ReceiptDraft(
+                draft.documentType(),
+                draft.source(),
+                draft.seller(),
+                draft.receipt(),
+                items,
+                draft.discountSummary(),
+                draft.taxSummary(),
+                draft.totals(),
+                draft.payments(),
+                draft.fiscalData(),
+                draft.unparsedLines());
     }
 
     private ReceiptDraft readDraft(String content) {

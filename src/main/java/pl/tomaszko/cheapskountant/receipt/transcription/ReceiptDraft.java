@@ -51,6 +51,7 @@ public record ReceiptDraft(
             String unitPrice,
             String total,
             String taxCategory,
+            String category,
             Discount discount) {
     }
 

@@ -64,7 +64,7 @@ class CreateReceiptFailureTest {
                 draft.source(),
                 draft.seller(),
                 draft.receipt(),
-                List.of(new ReceiptDraft.Item("Milk", null, BigDecimal.ONE, null, "4.00", null, "A", null)),
+                List.of(new ReceiptDraft.Item("Milk", null, BigDecimal.ONE, null, "4.00", null, "A", "Unknown", null)),
                 draft.discountSummary(),
                 draft.taxSummary(),
                 draft.totals(),
@@ -125,6 +125,7 @@ class CreateReceiptFailureTest {
                         "4.00",
                         "4.00",
                         "A",
+                        "Unknown",
                         new ReceiptDraft.Discount("OPUST", "1.00"))),
                 null,
                 draft.taxSummary(),
@@ -208,6 +209,54 @@ class CreateReceiptFailureTest {
                 request.unparsedLines());
 
         assertThat(service.create(withClientId).id()).isEqualTo(4L);
+    }
+
+    @Test
+    void blankItemCategoryIsIncomplete() {
+        assertFailure(withCategory("  "), ReceiptFailureReason.INCOMPLETE);
+        verify(receiptRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void unknownItemCategoryIsIncomplete() {
+        assertFailure(withCategory("Not a category"), ReceiptFailureReason.INCOMPLETE);
+        verify(receiptRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void householdItemCategoryIsAccepted() throws Exception {
+        when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
+        when(receiptRepository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        StoredReceiptResponse response = service.create(ReceiptFixtures.withoutId(withCategory("Jedzenie")));
+
+        assertThat(response.items().get(0).category()).isEqualTo("Jedzenie");
+    }
+
+    private ReceiptDraft withCategory(String category) {
+        ReceiptDraft draft = ReceiptFixtures.validDraft();
+        ReceiptDraft.Item item = draft.items().get(0);
+        return new ReceiptDraft(
+                draft.documentType(),
+                draft.source(),
+                draft.seller(),
+                draft.receipt(),
+                List.of(new ReceiptDraft.Item(
+                        item.description(),
+                        item.itemType(),
+                        item.quantity(),
+                        item.unit(),
+                        item.unitPrice(),
+                        item.total(),
+                        item.taxCategory(),
+                        category,
+                        item.discount())),
+                draft.discountSummary(),
+                draft.taxSummary(),
+                draft.totals(),
+                draft.payments(),
+                draft.fiscalData(),
+                draft.unparsedLines());
     }
 
     private void assertFailure(ReceiptDraft draft, ReceiptFailureReason reason) {

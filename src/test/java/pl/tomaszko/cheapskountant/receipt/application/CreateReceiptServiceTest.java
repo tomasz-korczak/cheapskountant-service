@@ -72,6 +72,7 @@ class CreateReceiptServiceTest {
         assertThat(response.seller().tradeName()).isEqualTo("Sklep");
         assertThat(response.receipt().number()).isEqualTo("R1");
         assertThat(response.items()).hasSize(1);
+        assertThat(response.items().get(0).category()).isEqualTo("Unknown");
         assertThat(response.taxSummary()).hasSize(1);
         assertThat(response.totals().grossAmount()).isEqualTo("4.00");
         assertThat(response.payments()).extracting(payment -> payment.method()).containsExactly("card");

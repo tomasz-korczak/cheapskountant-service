@@ -3,6 +3,9 @@ package pl.tomaszko.cheapskountant.receipt.transcription;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
@@ -44,6 +47,7 @@ class ReceiptTranscriptionServiceTest {
         assertThat(draft.documentType()).isEqualTo("fiscal_receipt");
         assertThat(draft.seller().tradeName()).isEqualTo("Sklep");
         assertThat(draft.items()).hasSize(1);
+        assertThat(draft.items()).allMatch(item -> "Unknown".equals(item.category()));
         assertThat(draft.taxSummary()).hasSize(1);
         assertThat(draft.payments()).hasSize(1);
 
@@ -56,6 +60,30 @@ class ReceiptTranscriptionServiceTest {
         assertThat(((OpenAiChatOptions) sent.getOptions()).getResponseFormat().getJsonSchema()).contains("fiscal_receipt");
         assertThat(sent.getSystemMessage().getText()).contains("discountSummary");
         assertThat(((OpenAiChatOptions) sent.getOptions()).getResponseFormat().getJsonSchema()).contains("discountSummary");
+        String schema = ((OpenAiChatOptions) sent.getOptions()).getResponseFormat().getJsonSchema();
+        assertThat(schema).contains("\"category\"");
+        assertThat(schema).contains("\"minLength\": 1");
+        assertThat(schema).doesNotContain("Jedzenie");
+        assertThat(sent.getSystemMessage().getText()).contains("Set every item category to Unknown");
+    }
+
+    @Test
+    void overwritesAModelCategoryWithUnknown() {
+        String json = ReceiptFixtures.JSON.replace("\"category\": \"Unknown\"", "\"category\": \"Jedzenie\"");
+        ReceiptTranscriptionService service = service(prompt -> json(json), Duration.ofSeconds(5));
+
+        ReceiptDraft draft = service.transcribe(List.of(image()));
+
+        assertThat(draft.items()).allMatch(item -> "Unknown".equals(item.category()));
+    }
+
+    @Test
+    void bothSchemaCopiesRequireCategoryWithoutListingNames() throws Exception {
+        String classpath = new ClassPathResource("schemas/receipt-schema.json").getContentAsString(StandardCharsets.UTF_8);
+        String external = Files.readString(Path.of(".external-resources/receipt-schema.json"));
+        assertThat(classpath).isEqualTo(external);
+        assertThat(classpath).contains("\"category\": { \"type\": \"string\", \"minLength\": 1 }");
+        assertThat(classpath).doesNotContain("Jedzenie");
     }
 
     @Test

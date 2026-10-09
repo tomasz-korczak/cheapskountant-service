@@ -1,0 +1,273 @@
+openapi: 3.0.3
+info:
+  title: Cheapskountant expense categories
+  version: 1.2.0
+  description: |
+    Adds GET /api/expenses, and GET and POST /api/expense.
+    Extends the receipt item from specs/002-receipt-discounts/contracts/receipt-discounts.openapi.yaml
+    with a required category name. The receipt schema does not list allowed names.
+    Errors use the existing reason and explanation body.
+paths:
+  /api/expense:
+    get:
+      summary: Summarize expenses by category and currency for a payment-date range
+      description: |
+        Requires Authorization Bearer API_KEY.
+        from and to are calendar dates and are inclusive.
+        Returns one summed amount per category name and currency used in the range.
+        Amounts are added only when both the category and the currency match.
+        The currency is returned as stored. Currencies are not converted.
+        Descriptions are omitted.
+        The same date for from and to is that one day.
+        A range with no expenses is 200 and an empty array.
+        There is no limit on how many expenses may already be stored.
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: One total per category and currency. Order is not significant.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CategoryTotal'
+        '400':
+          description: |
+            invalid submission. Missing dates, a date that is not a real calendar date, or from after to.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Failure'
+        '401':
+          description: not authorized. The same reason and explanation whether or not expenses exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Failure'
+        '500':
+          description: storage failed. Stored expenses stay unchanged.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Failure'
+    post:
+      summary: Store a list of expenses
+      description: |
+        Requires Authorization Bearer API_KEY.
+        Body is a JSON array of 1 to 500 expenses. The limit is this request only.
+        Further requests may store more expenses on the same payment date.
+        Category is the household name and must match exactly. The service stores the matching category id.
+        One invalid expense rejects the whole array with HTTP 400, including every valid expense in that request.
+        A blank category, Unknown, a name that is not an exact household name, a description made only of spaces,
+        a payment date that is not a real calendar date, or a missing required field is enough.
+        A missing required field, an amount that does not fit DECIMAL(8,2),
+        a payment date that is not a calendar date, a currency that is not
+        exactly three characters, or a description longer than 100 characters
+        also rejects the whole array. Nothing from a rejected array is stored.
+        Success returns the stored expenses with category still shown as the name.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 1
+              maxItems: 500
+              items:
+                $ref: '#/components/schemas/Expense'
+      responses:
+        '201':
+          description: Every expense in the request was stored.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Expense'
+        '400':
+          description: |
+            invalid submission. Empty or unreadable body, more than 500 expenses,
+            unknown category, or any invalid or missing field. Nothing is stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Failure'
+        '401':
+          description: not authorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Failure'
+        '500':
+          description: storage failed. Nothing from this request remains stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Failure'
+  /api/expenses:
+    get:
+      summary: List the household category names
+      description: |
+        Requires Authorization Bearer API_KEY.
+        Returns the household names in the FR-002 list order, from Jedzenie through Fermentacja alkoholowa.
+        Each item is the name. Unknown is not included.
+        Storing expenses does not change this list.
+      responses:
+        '200':
+          description: Household category names
+          content:
+            application/json:
+              schema:
+                type: array
+                minItems: 34
+                maxItems: 34
+                items:
+                  $ref: '#/components/schemas/CategoryName'
+        '401':
+          description: not authorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Failure'
+  /api/transcription:
+    post:
+      summary: Transcribe one receipt; every item category is Unknown
+      description: |
+        Same request as create-receipt. The success body is the receipt without id.
+        Each items[] entry includes category. The photo has no category, so transcription sets it to Unknown.
+      responses:
+        '200':
+          description: Transcribed receipt. Every item category is Unknown. Nothing is stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReceiptItemCategory'
+  /api/receipt:
+    post:
+      summary: Store a structured receipt whose items include category
+      description: |
+        Each items[] entry requires category. The name must be Unknown or a household name.
+        The stored receipt returns that name. A missing name or a name that is not seeded
+        is incomplete, and nothing is stored. The submitted category is not replaced with Unknown.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReceiptItemCategory'
+      responses:
+        '201':
+          description: Stored receipt, including each item category name
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReceiptItemCategory'
+        '422':
+          description: incomplete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Failure'
+components:
+  schemas:
+    Failure:
+      type: object
+      required: [reason, explanation]
+      properties:
+        reason:
+          type: string
+          enum:
+            - invalid submission
+            - not authorized
+            - unreadable
+            - incomplete
+            - transcription unavailable
+            - storage failed
+        explanation:
+          type: string
+          minLength: 1
+    Expense:
+      type: object
+      additionalProperties: false
+      required: [amount, paymentDate, category, currency]
+      properties:
+        amount:
+          type: number
+          multipleOf: 0.01
+          minimum: -999999.99
+          maximum: 999999.99
+          description: JSON number. At most two fractional digits. Not a string.
+        paymentDate:
+          type: string
+          format: date
+        category:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: Household category name. Unknown is rejected.
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        description:
+          type: string
+          maxLength: 100
+    CategoryName:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: One household category name. Unknown is not returned.
+    CategoryTotal:
+      type: object
+      additionalProperties: false
+      required: [category, currency, amount]
+      properties:
+        category:
+          type: string
+          description: Category name.
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          description: Stored currency for this total. Not converted. eur and EUR are separate totals.
+        amount:
+          type: number
+          multipleOf: 0.01
+          description: Sum of stored amounts for that category and currency in the range. Scale 2. May exceed 999999.99.
+    ReceiptItemCategory:
+      type: object
+      description: |
+        Existing receipt body. items[].category is required and is not an enum.
+        Other receipt fields are unchanged.
+      required: [documentType, seller, receipt, items, taxSummary, totals, payments]
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Assigned by storage. Omitted by transcription. Ignored on input.
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [description, quantity, unitPrice, total, taxCategory, category]
+            properties:
+              category:
+                type: string
+                minLength: 1
+                description: Required name. Not an enum in the schema. Seeded names only at storage.

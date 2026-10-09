@@ -49,6 +49,7 @@ class CreateReceiptControllerTest {
                 .andExpect(jsonPath("$.seller.taxId").value("1234567890"))
                 .andExpect(jsonPath("$.receipt.number").value("R1"))
                 .andExpect(jsonPath("$.items[0].description").value("Milk"))
+                .andExpect(jsonPath("$.items[0].category").value("Unknown"))
                 .andExpect(jsonPath("$.taxSummary[0].taxCategory").value("A"))
                 .andExpect(jsonPath("$.totals.grossAmount").value("4.00"))
                 .andExpect(jsonPath("$.payments[0].method").value("card"));
@@ -106,7 +107,7 @@ class CreateReceiptControllerTest {
                 null,
                 new ReceiptDraft.Seller("Sklep", null, "1234567890", null, null, null),
                 new ReceiptDraft.ReceiptInfo("R1", OffsetDateTime.parse("2024-05-01T12:30:00Z"), "PLN", null),
-                List.of(new ReceiptDraft.Item("Milk", null, BigDecimal.ONE, null, "4.00", "4.00", "A", null)),
+                List.of(new ReceiptDraft.Item("Milk", null, BigDecimal.ONE, null, "4.00", "4.00", "A", "Unknown", null)),
                 null,
                 List.of(new ReceiptDraft.TaxLine("A", new BigDecimal("23"), "3.25", "0.75")),
                 new ReceiptDraft.Totals("0.75", "4.00", "4.00"),

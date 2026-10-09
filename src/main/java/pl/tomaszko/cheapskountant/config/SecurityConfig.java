@@ -51,14 +51,18 @@ public class SecurityConfig {
         }
 
         private boolean requiresApiKey(HttpServletRequest request) {
-            if (!"POST".equalsIgnoreCase(request.getMethod())) {
-                return false;
-            }
             String path = request.getServletPath();
             if (path == null || path.isEmpty()) {
                 path = request.getRequestURI();
             }
-            return "/api/receipt".equals(path) || "/api/transcription".equals(path);
+            String method = request.getMethod();
+            if ("POST".equalsIgnoreCase(method) && ("/api/receipt".equals(path) || "/api/transcription".equals(path))) {
+                return true;
+            }
+            if ("/api/expense".equals(path) && ("GET".equalsIgnoreCase(method) || "POST".equalsIgnoreCase(method))) {
+                return true;
+            }
+            return "/api/expenses".equals(path) && "GET".equalsIgnoreCase(method);
         }
 
         private boolean authorized(String header) {
