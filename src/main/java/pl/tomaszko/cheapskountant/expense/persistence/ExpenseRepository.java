@@ -13,6 +13,10 @@ public interface ExpenseRepository extends JpaRepository<ExpenseEntity, Long> {
 
     long countByPaymentDate(LocalDate paymentDate);
 
+    boolean existsByReceiptItem_Id(Long receiptItemId);
+
+    List<ExpenseEntity> findByReceiptItem_Receipt_IdOrderByReceiptItem_LineNoAsc(Long receiptId);
+
     @Query("""
             select new pl.tomaszko.cheapskountant.expense.api.CategoryTotal(c.name, e.currency, sum(e.amount))
             from ExpenseEntity e

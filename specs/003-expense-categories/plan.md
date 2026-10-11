@@ -10,15 +10,17 @@ Authorized callers read the household category names, store a list of household 
 
 Receipt line items gain a required `category`. The receipt JSON schema requires that string and does not list allowed names. The database stores it as a required foreign key to the category dictionary. The dictionary is seeded with the 34 household names plus Unknown. A receipt photo has no category, so the transcription prompt tells the model to set Unknown, and the service then sets Unknown on every parsed item. Expense storage rejects a blank category, Unknown, and any other name that is not a household name. `GET /api/expenses` returns the 34 household names so the caller can choose one.
 
+Storing a receipt also creates one expense per receipt item in the same transaction. The generated amount is the line total plus the optional negative item discount; the receipt-level discount summary is ignored. Payment date is the date component of the receipt issue time, category comes from the item, currency comes from the receipt header, and description is null. Each generated expense has a unique optional foreign key to its source receipt item. Manually submitted and existing expenses remain unlinked, and existing receipts are not backfilled.
+
 ## Technical Context
 
 **Language/Version**: Java 23, JDK home `C:\tools\jdk-23.0.2`, Maven compiler release 23
 
 **Primary Dependencies**: Spring Boot 4.1.1, Spring AI 2.0.1 with `spring-ai-starter-model-openai` against OpenRouter, Spring Data JPA, Liquibase
 
-**Storage**: MariaDB. A new Liquibase SQL changeset `003-expense-categories` creates `expense_category` and `expense`, seeds the category names, and adds a required `category_id` on `receipt_item`. Hibernate `ddl-auto` stays `validate`. Changesets `001` and `002` are not edited.
+**Storage**: MariaDB. Liquibase SQL changeset `003-expense-categories` creates `expense_category` and `expense`, seeds the category names, and adds a required `category_id` on `receipt_item`. Changeset `004-receipt-item-expenses` adds nullable, unique `expense.receipt_item_id` with an `ON DELETE SET NULL` foreign key. Hibernate `ddl-auto` stays `validate`. Earlier changesets are not edited.
 
-**Testing**: JUnit 5 and Spring Boot Test. Expense validation and the summary grouping are unit-tested. Persistence of expenses and of a receipt item category is tested against MariaDB via Testcontainers. Controller tests cover `GET` and `POST /api/expense` and the new receipt item field without calling OpenRouter.
+**Testing**: JUnit 5 and Spring Boot Test. Expense validation, summary grouping, receipt-to-expense mapping, discount arithmetic, amount overflow, and duplicate prevention are unit-tested. Persistence of expenses, receipt item categories, and generated expense links is tested against MariaDB via Testcontainers. Controller tests cover `GET` and `POST /api/expense` and the receipt storage behavior without calling OpenRouter.
 
 **Target Platform**: Existing Docker image of this service. No frontend.
 
@@ -26,9 +28,9 @@ Receipt line items gain a required `category`. The receipt JSON schema requires 
 
 **Performance Goals**: Unchanged. Transcription still returns within 60 seconds. Expense storage and the summary do not call the model. The summary groups one date range by category name and currency.
 
-**Constraints**: One shared ledger. `POST /api/expense` accepts 1 to 500 expenses and keeps the whole list or none of it. That limit is per request, not per payment date. Expense validation failures are HTTP 400 with the existing `{reason, explanation}` body. Receipt category failures stay on the existing receipt reasons. Photos are not retained. Expense amounts are `DECIMAL(8,2)`. Currencies are not converted. `GET /api/expenses` returns names only.
+**Constraints**: One shared ledger. `POST /api/expense` accepts 1 to 500 expenses and keeps the whole list or none of it. That limit is per request, not per payment date. Receipt storage and its generated expenses are atomic. A generated amount outside `DECIMAL(8,2)` refuses the receipt as `invalid submission`. Expense validation failures are HTTP 400 with the existing `{reason, explanation}` body. Receipt category failures stay on the existing receipt reasons. Photos are not retained. Currencies are not converted. `GET /api/expenses` returns names only.
 
-**Scale/Scope**: `GET /api/expenses`, `GET /api/expense`, and `POST /api/expense`. The receipt body gains `items[].category`. The category dictionary is fixed at 35 seeded names. The name list returns the 34 household names.
+**Scale/Scope**: `GET /api/expenses`, `GET /api/expense`, `POST /api/expense`, and generated expenses during `POST /api/receipt`. The receipt body gains `items[].category`. The category dictionary is fixed at 35 seeded names. The name list returns the 34 household names. Existing receipts are not backfilled.
 
 ## Constitution Check
 
@@ -36,9 +38,9 @@ Receipt line items gain a required `category`. The receipt JSON schema requires 
 
 | Gate | Result |
 |------|--------|
-| I. REST API only. JSON HTTP endpoints. No frontend. | Pass. New behavior is `GET /api/expenses`, `GET /api/expense`, and `POST /api/expense`. Receipt transcription and storage keep their paths and gain `items[].category`. |
-| II. Explicit API contracts. Correct HTTP usage. One error format. | Pass. `contracts/expense-categories.openapi.yaml` defines the three expense operations and the receipt item field. Failures reuse `{reason, explanation}`. Expense validation is HTTP 400 with reason `invalid submission`. Unauthorized stays HTTP 401. A failed save is HTTP 500 with reason `storage failed`. |
-| III. Tested behavior. Endpoint and business-rule tests. | Pass. Store, summary, receipt category, schema, and prompt behavior are covered. A live OpenRouter call is not part of the default test run. |
+| I. REST API only. JSON HTTP endpoints. No frontend. | Pass. New behavior is `GET /api/expenses`, `GET /api/expense`, and `POST /api/expense`. Receipt transcription and storage keep their paths; receipt storage also writes linked expenses. |
+| II. Explicit API contracts. Correct HTTP usage. One error format. | Pass. `contracts/expense-categories.openapi.yaml` defines the three expense operations, the receipt item field, and the receipt-save side effect. Failures reuse `{reason, explanation}`. Invalid generated amounts are HTTP 400 with reason `invalid submission`. Unauthorized stays HTTP 401. A failed save is HTTP 500 with reason `storage failed`. |
+| III. Tested behavior. Endpoint and business-rule tests. | Pass. Store, summary, receipt category, generated expense mapping, atomicity, schema, and prompt behavior are covered. A live OpenRouter call is not part of the default test run. |
 | IV. Secure by default. Validate input. Authenticate. No secrets in source or logs. | Pass. `GET /api/expenses`, `GET /api/expense`, and `POST /api/expense` require `API_KEY`. The current filter only checks `POST /api/receipt` and `POST /api/transcription`, so it must be extended. Amount, date, currency, description, list size, and category name are validated before insert. |
 | Configuration is external. | Pass. No new secret or setting. |
 | Database changes are Liquibase SQL changesets. | Pass. New formatted SQL changeset only. |
@@ -81,15 +83,17 @@ src/main/java/pl/tomaszko/cheapskountant/expense/
 src/main/java/pl/tomaszko/cheapskountant/receipt/
 ├── transcription/ReceiptDraft.java
 ├── transcription/ReceiptTranscriptionService.java
+├── application/CreateReceiptService.java
 ├── application/ReceiptCompletenessChecker.java
+├── persistence/ReceiptExpenseFactory.java
 ├── persistence/ReceiptItemEntity.java
 └── persistence/ReceiptMapper.java
 src/test/java/pl/tomaszko/cheapskountant/expense/
 src/test/java/pl/tomaszko/cheapskountant/receipt/
 ```
 
-**Structure Decision**: Keep the single Maven module. Expenses are a new package beside `receipt`. Receipt items reference `ExpenseCategoryEntity`. `ReceiptDraft.Item` is the receipt object used by transcription and by `StoredReceiptResponse`, so adding `category` there covers both HTTP bodies. `.external-resources/receipt-schema.json` and `src/main/resources/schemas/receipt-schema.json` stay identical. The classpath copy is what the model receives.
+**Structure Decision**: Keep the single Maven module. Expenses are a package beside `receipt`. Receipt items reference `ExpenseCategoryEntity`, and receipt-generated expenses optionally reference `ReceiptItemEntity`. `ReceiptExpenseFactory` owns the receipt-to-expense mapping while `CreateReceiptService` persists receipt and expense rows in one transaction. `ReceiptDraft.Item` is the receipt object used by transcription and by `StoredReceiptResponse`, so adding `category` there covers both HTTP bodies. `.external-resources/receipt-schema.json` and `src/main/resources/schemas/receipt-schema.json` stay identical. The classpath copy is what the model receives.
 
 ## Complexity Tracking
 
-No constitution gates fail. Unknown is a seeded category row because a receipt item's category is a required foreign key, while transcription has no household category to assign. Expense storage still rejects that name.
+No constitution gates fail. Unknown is a seeded category row because a receipt item's category is a required foreign key, while transcription has no household category to assign. Manual expense storage still rejects that name; a generated expense may inherit it from its receipt item.

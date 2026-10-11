@@ -229,3 +229,9 @@ ALTER TABLE receipt_item ADD COLUMN category_id BIGINT NULL;
 UPDATE receipt_item SET category_id = (SELECT id FROM expense_category WHERE name = 'Unknown');
 ALTER TABLE receipt_item MODIFY category_id BIGINT NOT NULL;
 ALTER TABLE receipt_item ADD CONSTRAINT fk_receipt_item_category FOREIGN KEY (category_id) REFERENCES expense_category (id) ON DELETE RESTRICT;
+
+--changeset cheapskountant:004-receipt-item-expenses
+ALTER TABLE expense
+    ADD COLUMN receipt_item_id BIGINT NULL,
+    ADD CONSTRAINT uq_expense_receipt_item UNIQUE (receipt_item_id),
+    ADD CONSTRAINT fk_expense_receipt_item FOREIGN KEY (receipt_item_id) REFERENCES receipt_item (id) ON DELETE SET NULL;

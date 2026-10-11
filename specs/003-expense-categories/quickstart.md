@@ -10,6 +10,7 @@ Validates expense storage, the category summary, and the receipt item category. 
 - Both calls require `Authorization: Bearer <API_KEY>`.
 - Receipt `items[].category` is required. The schema does not list allowed names.
 - Transcription sets every item category to `Unknown`.
+- Storing a receipt creates one linked expense per receipt item in the same transaction.
 - Schema copies: `.external-resources/receipt-schema.json` and `src/main/resources/schemas/receipt-schema.json`.
 - Prompt: `src/main/resources/prompts/receipt-transcription-system.st`.
 
@@ -30,6 +31,9 @@ Expected:
 - Three accepted requests of 200 expenses on one payment date leave 600 stored expenses for that date.
 - A summary with no expenses is an empty array. A missing date, or a first date after the last date, is `invalid submission`. The same date for both ends is that one day.
 - A stored receipt item returns its category name. A receipt item with no category, or a category that is not seeded, is `incomplete` and is not saved.
+- A stored receipt creates one expense per item. An item expense is `line total + item discount total`, with a missing discount treated as zero. The receipt-level discount summary is ignored.
+- Generated expenses use the receipt issue date, item category, and receipt currency; description is null. Each is uniquely linked to its source item.
+- A generated amount outside `DECIMAL(8,2)` refuses and rolls back the whole receipt. Existing receipts are not backfilled.
 - A transcribed receipt has `Unknown` on every item.
 - The prompt tells the model to set `category` to `Unknown`.
 - Both schema copies require `items[].category` and do not enumerate category names.
@@ -73,4 +77,16 @@ A third object with `"category": "Unknown"` in a new request returns HTTP 400, r
 
 Submit a receipt photo to `POST /api/transcription`. Every `items[]` entry has `"category": "Unknown"`.
 
-Store that body with `POST /api/receipt`. The response keeps `Unknown` on each item and adds `id`. Replacing one item category with `Jedzenie` before storage returns `Jedzenie` for that item. Replacing it with a name that is not seeded returns `incomplete` and stores nothing.
+Store that body with `POST /api/receipt`. The response keeps `Unknown` on each item and adds `id`. The response body is unchanged by expense generation.
+
+Expected expense side effects:
+
+- Exactly one expense is stored per receipt item.
+- An item with line total `26.07` and item discount `-8.69` creates amount `17.38`; an item without a discount uses its line total.
+- Payment date is the date part of `receipt.issuedAt`, category is `items[].category`, currency is `receipt.currency`, and description is null.
+- `discountSummary` creates no expense and does not change item amounts.
+- Re-evaluating generation for the same stored item creates no duplicate because `expense.receipt_item_id` is unique.
+
+Replacing one item category with `Jedzenie` before storage returns `Jedzenie` for that item and uses `Jedzenie` on its generated expense. Replacing it with a name that is not seeded returns `incomplete` and stores neither the receipt nor any expense.
+
+Set an item's net amount above `999999.99`. Expected: HTTP 400 with reason `invalid submission`, with neither the receipt nor any generated expense retained.

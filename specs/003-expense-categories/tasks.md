@@ -6,7 +6,7 @@
 
 **Tests**: Included because the constitution requires endpoint and business-rule coverage. Write the tests for a story so they fail before that story's implementation.
 
-**Organization**: Tasks are grouped by user story. Story 1 stores expenses. Story 2 summarizes a date range by category and currency. Story 3 records a category on each receipt item. Story 6 lists the household names. Story 4 refuses a bad expense or summary request. Story 5 refuses a receipt item with no category.
+**Organization**: Tasks are grouped by user story. Story 1 stores expenses. Story 2 summarizes a date range by category and currency. Story 3 records a category on each receipt item. Story 6 lists the household names. Story 4 refuses a bad expense or summary request. Story 5 refuses a receipt item with no category. Story 7 creates one linked expense per stored receipt item.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -131,15 +131,33 @@
 
 ---
 
+## Phase 10: User Story 7 - Create expenses while storing a receipt (Priority: P1)
+
+**Goal**: Receipt storage atomically creates one linked expense per receipt item.
+
+**Independent Test**: Store a receipt with discounted and non-discounted items. Confirm one expense per item, correct net amounts, copied date/category/currency, null descriptions, unique source links, and no duplicate when generation is evaluated again.
+
+- [x] T027 [US7] Add Liquibase SQL changeset `cheapskountant:004-receipt-item-expenses` in `src/main/resources/db/changelog/db.changelog-master.sql`. Add nullable, unique `expense.receipt_item_id`, foreign-keyed to `receipt_item(id)` with `ON DELETE SET NULL`. Do not backfill existing rows.
+- [x] T028 [US7] Map the optional source item in `src/main/java/pl/tomaszko/cheapskountant/expense/persistence/ExpenseEntity.java` and add receipt-item existence and receipt lookup methods to `ExpenseRepository.java`. Keep the existing constructor for manually submitted expenses.
+- [x] T029 [US7] Add `src/main/java/pl/tomaszko/cheapskountant/receipt/persistence/ReceiptExpenseFactory.java`. Map amount as line total plus optional item discount, issue date as payment date, item category, header currency, null description, and source item. Ignore receipt-level discount summary and reject net amounts outside `DECIMAL(8,2)`.
+- [x] T030 [US7] Update `src/main/java/pl/tomaszko/cheapskountant/receipt/application/CreateReceiptService.java` so receipt save and generated-expense save use one transaction. Refuse an oversized generated amount before receipt insert, skip an item that already has a linked expense, and roll back receipt and expenses together on failure.
+- [x] T031 [P] [US7] Add unit coverage in `src/test/java/pl/tomaszko/cheapskountant/receipt/persistence/ReceiptExpenseFactoryTest.java`, `CreateReceiptServiceTest.java`, and `CreateReceiptFailureTest.java` for missing discounts, discount arithmetic, copied values, null description, source link, duplicate prevention, overflow, and rollback.
+- [x] T032 [US7] Extend `src/test/java/pl/tomaszko/cheapskountant/receipt/persistence/ReceiptPersistenceTest.java` to verify persisted one-to-one item links and that reevaluating a stored receipt creates no duplicate. Run the unit suite; run MariaDB Testcontainers coverage when Docker is available.
+
+**Checkpoint**: Every newly stored receipt item has one generated expense, and no partial receipt or expense set remains after failure.
+
+---
+
 ## Dependencies
 
 - Phase 2 blocks every story. T004 and T005 depend on T003. T002, T003, and T006 can start together.
 - US1 depends on the expense table, category lookup, and API-key filter. It does not depend on the summary or the receipt category behavior.
 - US2 depends on US1's stored rows for an end-to-end check. Its grouping tests can use the repository directly after Phase 2.
-- US3 depends on T001, T005, and the seeded dictionary. It does not create expenses.
+- US3 depends on T001, T005, and the seeded dictionary.
 - US6 depends on T003 and T006. It does not depend on stored expenses.
 - US4 extends the store and summary paths from US1 and US2. It does not introduce a second error body.
 - US5 extends the receipt check from US3.
+- US7 depends on US1's expense persistence and US3's categorized receipt items. Its schema task precedes entity mapping and transactional generation.
 
 ## Parallel example
 
@@ -152,9 +170,9 @@ After Phase 2:
 
 ## Implementation strategy
 
-Story 1 is the MVP: one shared ledger accepts a valid batch and keeps all of it or none of it. Story 6 is the next increment so a caller can read the names that Story 1 requires. Story 2 adds the date-range totals, one per category and currency. Story 3 adds the receipt item category and the transcription placeholder. Stories 4 and 5 close the refusal cases for expenses and receipt items.
+Story 1 is the MVP: one shared ledger accepts a valid batch and keeps all of it or none of it. Story 6 lets a caller read the names that Story 1 requires. Story 2 adds the date-range totals, one per category and currency. Story 3 adds the receipt item category and the transcription placeholder. Stories 4 and 5 close the refusal cases for expenses and receipt items. Story 7 connects receipt storage to the ledger with one generated expense per item.
 
-Storing an expense must not create a receipt. Storing or transcribing a receipt must not create an expense.
+Storing an expense must not create a receipt. Transcription must not create an expense. Storing a receipt must atomically create one expense per receipt item.
 
 ## Format validation
 

@@ -5,12 +5,15 @@ import java.time.LocalDate;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+
+import pl.tomaszko.cheapskountant.receipt.persistence.ReceiptItemEntity;
 
 @Entity
 @Table(name = "expense")
@@ -36,6 +39,10 @@ public class ExpenseEntity extends ExpenseTimestamped {
     @Column(name = "description", length = 100)
     String description;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "receipt_item_id", unique = true)
+    ReceiptItemEntity receiptItem;
+
     protected ExpenseEntity() {
     }
 
@@ -45,11 +52,22 @@ public class ExpenseEntity extends ExpenseTimestamped {
             ExpenseCategoryEntity category,
             String currency,
             String description) {
+        this(amount, paymentDate, category, currency, description, null);
+    }
+
+    public ExpenseEntity(
+            BigDecimal amount,
+            LocalDate paymentDate,
+            ExpenseCategoryEntity category,
+            String currency,
+            String description,
+            ReceiptItemEntity receiptItem) {
         this.amount = amount;
         this.paymentDate = paymentDate;
         this.category = category;
         this.currency = currency;
         this.description = description;
+        this.receiptItem = receiptItem;
     }
 
     public BigDecimal amount() {
@@ -70,5 +88,9 @@ public class ExpenseEntity extends ExpenseTimestamped {
 
     public String description() {
         return description;
+    }
+
+    public ReceiptItemEntity receiptItem() {
+        return receiptItem;
     }
 }

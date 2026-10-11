@@ -33,6 +33,8 @@
 
 - Validation passed on the first review (2026-10-09). No spec updates were required.
 - Currency is part of each stored expense and of each summary total. Amounts are added only when the category and the currency both match. That choice is stated in FR-013 and in Assumptions.
-- Receipt line items require a category. The receipt definition does not list allowed names. Storage accepts Unknown or a household name. Transcription always uses Unknown. Unknown is refused on an expense.
+- Receipt line items require a category. The receipt definition does not list allowed names. Storage accepts Unknown or a household name. Transcription always uses Unknown. Unknown is refused on a manually submitted expense and may be inherited by a receipt-generated expense.
 - Empty expense lists are refused as an invalid submission. A list is accepted only when it contains 1 to 500 complete expenses.
 - An expense amount has at most six digits before the decimal separator and two after it. The summary covers an inclusive date range. The limit of 500 applies only to one storage request, not to how many expenses may be stored for a date.
+- Receipt storage creates one expense per item in the same atomic operation. The item discount is included once, the receipt-level discount summary is ignored, and an out-of-range generated amount rolls back the receipt.
+- Generated expenses have an optional unique source-item link. Existing receipts are not backfilled, and direct or existing expenses may remain unlinked.

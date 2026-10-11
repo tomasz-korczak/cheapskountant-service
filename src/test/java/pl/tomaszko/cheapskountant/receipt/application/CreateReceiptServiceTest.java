@@ -6,18 +6,24 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
+import java.time.LocalDate;
+import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
+import pl.tomaszko.cheapskountant.expense.persistence.ExpenseEntity;
+import pl.tomaszko.cheapskountant.expense.persistence.ExpenseRepository;
 import pl.tomaszko.cheapskountant.receipt.ReceiptFixtures;
 import pl.tomaszko.cheapskountant.receipt.api.StoredReceiptResponse;
 import pl.tomaszko.cheapskountant.receipt.persistence.ReceiptEntity;
+import pl.tomaszko.cheapskountant.receipt.persistence.ReceiptExpenseFactory;
 import pl.tomaszko.cheapskountant.receipt.persistence.ReceiptMapper;
 import pl.tomaszko.cheapskountant.receipt.persistence.ReceiptRepository;
 import pl.tomaszko.cheapskountant.receipt.transcription.ReceiptDraft;
@@ -27,6 +33,8 @@ class CreateReceiptServiceTest {
 
     @Mock
     private ReceiptRepository receiptRepository;
+    @Mock
+    private ExpenseRepository expenses;
     @Mock
     private PlatformTransactionManager transactionManager;
 
@@ -38,6 +46,8 @@ class CreateReceiptServiceTest {
                 new ReceiptCompletenessChecker(),
                 receiptRepository,
                 new ReceiptMapper(),
+                expenses,
+                new ReceiptExpenseFactory(),
                 transactionManager);
     }
 
@@ -78,6 +88,14 @@ class CreateReceiptServiceTest {
         assertThat(response.payments()).extracting(payment -> payment.method()).containsExactly("card");
         assertThat(response.source().fileName()).isEqualTo("page-1.jpg, page-2.jpg");
         assertThat(response.discountSummary()).isNull();
+        assertThat(savedExpenses()).singleElement().satisfies(expense -> {
+            assertThat(expense.amount()).isEqualByComparingTo("4.00");
+            assertThat(expense.paymentDate()).isEqualTo(LocalDate.parse("2024-05-01"));
+            assertThat(expense.category().name()).isEqualTo("Unknown");
+            assertThat(expense.currency()).isEqualTo("PLN");
+            assertThat(expense.description()).isNull();
+            assertThat(expense.receiptItem()).isNotNull();
+        });
         verify(transactionManager).commit(any());
     }
 
@@ -105,6 +123,22 @@ class CreateReceiptServiceTest {
         assertThat(response.items().get(2).discount()).isNull();
         assertThat(response.discountSummary().description()).isEqualTo("OPUSTY ŁĄCZNIE");
         assertThat(response.discountSummary().total()).isEqualTo("-8.69");
+        List<ExpenseEntity> stored = savedExpenses();
+        assertThat(stored).extracting(expense -> expense.amount().toPlainString())
+                .containsExactly("5.99", "17.38", "0.50");
+        assertThat(stored).allSatisfy(expense -> {
+            assertThat(expense.paymentDate()).isEqualTo(LocalDate.parse("2026-09-29"));
+            assertThat(expense.currency()).isEqualTo("PLN");
+            assertThat(expense.description()).isNull();
+            assertThat(expense.category().name()).isEqualTo("Unknown");
+        });
         verify(transactionManager).commit(any());
+    }
+
+    private List<ExpenseEntity> savedExpenses() {
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<ExpenseEntity>> captor = ArgumentCaptor.forClass(List.class);
+        verify(expenses).saveAllAndFlush(captor.capture());
+        return captor.getValue();
     }
 }

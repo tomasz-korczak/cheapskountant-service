@@ -9,13 +9,13 @@
 ## Requirement Completeness
 
 - [x] CHK001 Are the exact household category names, including punctuation and the single ellipsis, specified as the only names an expense may use? [Completeness, Spec §FR-002, Spec §FR-007] Resolved: FR-002 lists the names, and FR-007 limits an expense to those names.
-- [x] CHK002 Is Unknown specified as a stored name that receipt line items may use and that expenses must refuse? [Completeness, Spec §FR-002, Spec §FR-007, Spec §FR-022] Resolved: Unknown is stored for receipt items and refused on an expense.
+- [x] CHK002 Is Unknown specified as a stored name that receipt line items may use, that manually submitted expenses must refuse, and that receipt-generated expenses may inherit? [Completeness, Spec §FR-002, Spec §FR-007, Spec §FR-022, Spec §FR-028] Resolved: Unknown is stored for receipt items, refused on `POST /api/expense`, and copied to an expense generated from an Unknown receipt item.
 - [x] CHK003 Is the storage list specified as 1 to 500 expenses, with both an empty list and a list of 501 refused in full? [Completeness, Spec §FR-010, Spec §FR-011] Resolved: 1 to 500 is accepted. Empty and 501 are invalid submission, and nothing from that request is kept.
 - [x] CHK004 Is atomic retention specified so that one invalid expense, or a save that does not finish, retains none of that list while earlier successful lists remain? [Completeness, Spec §FR-010, Spec §FR-018, Edge Cases] Resolved: one request is all or nothing. Earlier successful requests stay.
 - [x] CHK005 Is the summary specified as the only expense retrieval, for an inclusive first and last payment date, with one total per category name and currency? [Completeness, Spec §FR-013] Resolved: stored amounts are retrieved only as that summary. Each total includes the stored currency. Category names are a separate read.
 - [x] CHK006 Is a receipt line item's category specified as required, limited at storage to Unknown or a household name, while the receipt definition does not list those names? [Completeness, Spec §FR-019, Spec §FR-021, Spec §FR-022] Resolved: the definition requires the category and does not list names. Storage accepts only Unknown or a household name.
 - [x] CHK007 Is the category requirement specified to apply only to receipt line items, and not to discounts, the discount summary, seller, payments, tax summary, totals, or unplaced lines? [Completeness, Spec §FR-023] Resolved: only a line item has a category.
-- [x] CHK008 Is it specified that storing an expense does not create or change a receipt, and that transcribing or storing a receipt does not create an expense? [Completeness, Spec §FR-024] Resolved: the two records stay separate.
+- [x] CHK008 Is it specified that storing an expense does not create or change a receipt, transcription does not create an expense, and receipt storage does create linked expenses? [Completeness, Spec §FR-024, Spec §FR-026] Resolved: only receipt storage creates expenses; manual expense storage and transcription do not create records in the other model.
 
 ## Requirement Clarity
 
@@ -65,10 +65,19 @@
 ## Dependencies and Assumptions
 
 - [x] CHK039 Is the decision to keep each currency as its own total documented as intentional, including that no conversion is performed and the stored currency is shown? [Assumption, Spec §FR-008, Spec §FR-013] Resolved: amounts are added only when category and currency both match. The summary returns that currency as stored and does not convert it.
-- [x] CHK040 Is the boundary between this capability and individual expense listing, editing, deletion, and turning a receipt into expenses explicitly out of scope? [Completeness, Assumptions] Resolved: those actions are out of scope. Stored amounts are retrieved only as the summary.
+- [x] CHK040 Is the boundary between this capability and individual expense listing, editing, and deletion explicitly out of scope while receipt-to-expense creation is defined? [Completeness, Assumptions, Spec §FR-026] Resolved: individual listing, editing, and deletion remain out of scope. Receipt storage creates expenses.
+
+## Receipt-generated expense coverage
+
+- [x] CHK041 Is the one-expense-per-item mapping complete for amount, payment date, category, currency, description, and source link? [Completeness, Spec §FR-026–FR-029] Resolved: every generated field and the unique optional receipt-item link are specified.
+- [x] CHK042 Is a missing item discount distinguished from the receipt-level discount summary? [Clarity, Spec §FR-027] Resolved: a missing item discount is zero; the receipt-level summary is ignored and creates no expense.
+- [x] CHK043 Is receipt and generated-expense atomicity defined for validation and persistence failures? [Recovery, Spec §FR-026, Spec §FR-031] Resolved: an out-of-range net amount or persistence failure leaves neither the receipt nor any generated expense.
+- [x] CHK044 Is duplicate prevention defined without preventing standalone expenses? [Consistency, Spec §FR-029] Resolved: `receipt_item_id` is optional and unique; direct and existing expenses are null, and one item has at most one linked expense.
+- [x] CHK045 Is migration behavior defined for existing receipts and expenses? [Migration, Spec §FR-029–FR-030] Resolved: existing receipts are not backfilled and existing expenses remain unlinked.
+- [x] CHK046 Is it clear that a new receipt submission has new item identities and therefore creates a new expense set? [Clarity, Edge Cases] Resolved: duplicate prevention applies per stored receipt item, not by receipt content.
 
 ## Notes
 
 - Items are questions about the requirements, for the author to answer before tasks are written.
 - Mark an item `[x]` only when the spec, or a recorded clarification, already answers it.
-- All 40 items are closed. One invalid expense refuses the whole storage request.
+- All 46 items are closed. One invalid expense refuses the whole storage request, and receipt storage atomically creates one linked expense per item.

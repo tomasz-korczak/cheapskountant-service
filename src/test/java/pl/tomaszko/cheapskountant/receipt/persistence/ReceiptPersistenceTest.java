@@ -13,7 +13,9 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.mariadb.MariaDBContainer;
 
+import pl.tomaszko.cheapskountant.expense.persistence.ExpenseRepository;
 import pl.tomaszko.cheapskountant.receipt.ReceiptFixtures;
+import pl.tomaszko.cheapskountant.receipt.application.CreateReceiptService;
 import pl.tomaszko.cheapskountant.receipt.transcription.ReceiptDraft;
 
 @SpringBootTest
@@ -30,6 +32,15 @@ class ReceiptPersistenceTest {
 
     @Autowired
     private ReceiptMapper receiptMapper;
+
+    @Autowired
+    private CreateReceiptService createReceiptService;
+
+    @Autowired
+    private ReceiptExpenseFactory receiptExpenses;
+
+    @Autowired
+    private ExpenseRepository expenses;
 
     @Autowired
     private EntityManager entityManager;
@@ -101,5 +112,19 @@ class ReceiptPersistenceTest {
         var response = receiptMapper.toResponse(loaded);
         assertThat(response.items().get(1).discount().total()).isEqualTo("-8.69");
         assertThat(response.discountSummary().description()).isEqualTo("OPUSTY ŁĄCZNIE");
+    }
+
+    @Test
+    void savingAReceiptCreatesOneExpensePerItemAndDoesNotRepeatIt() {
+        var saved = createReceiptService.create(ReceiptFixtures.withoutId(ReceiptFixtures.discountedDraft()));
+
+        assertThat(expenses.findByReceiptItem_Receipt_IdOrderByReceiptItem_LineNoAsc(saved.id()))
+                .extracting(expense -> expense.amount().toPlainString())
+                .containsExactly("5.99", "17.38", "0.50");
+        assertThat(expenses.findByReceiptItem_Receipt_IdOrderByReceiptItem_LineNoAsc(saved.id()))
+                .allSatisfy(expense -> assertThat(expense.description()).isNull());
+
+        ReceiptEntity loaded = receiptRepository.findById(saved.id()).orElseThrow();
+        assertThat(receiptExpenses.missing(loaded, expenses)).isEmpty();
     }
 }

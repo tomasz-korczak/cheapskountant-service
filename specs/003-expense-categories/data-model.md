@@ -14,7 +14,12 @@ Every new table has:
 
 On insert both timestamps are the same value, truncated to milliseconds, as `Timestamped` does for receipt rows. This feature has no update operation. Expense entities stamp themselves the same way inside the expense persistence package.
 
-Changeset id: `cheapskountant:003-expense-categories`. Do not edit changesets `001` or `002`.
+Changeset ids:
+
+- `cheapskountant:003-expense-categories` creates the category and expense model.
+- `cheapskountant:004-receipt-item-expenses` adds the optional source-item link.
+
+Do not edit earlier changesets.
 
 ## expense_category
 
@@ -70,7 +75,7 @@ The longest name fits in `VARCHAR(50)`.
 
 ## expense
 
-One stored payment. Many rows may share a category and a payment date.
+One stored payment. Many rows may share a category and a payment date. A row may be submitted directly or generated from one receipt item.
 
 | Column | Required | Notes |
 |--------|----------|-------|
@@ -80,9 +85,12 @@ One stored payment. Many rows may share a category and a payment date.
 | category_id | yes | Foreign key to `expense_category`. Must be a household name, not `Unknown`. |
 | currency | yes | `VARCHAR(3)`. Exactly three characters. |
 | description | no | `VARCHAR(100)`. Null when omitted or blank. |
+| receipt_item_id | no | Unique foreign key to `receipt_item`. Null for manually submitted and existing expenses. |
 | created_at, updated_at | yes | |
 
 `ON DELETE` for `category_id` is `RESTRICT`. Deleting a category must not delete expenses. There is no category-delete operation.
+
+`receipt_item_id` uses `ON DELETE SET NULL`. The unique constraint guarantees at most one generated expense per receipt item while allowing any number of null values. Existing expense rows remain null when the column is added. Existing receipts are not backfilled.
 
 Index `payment_date` so the summary range scan does not read the whole table by default.
 
@@ -96,6 +104,25 @@ Validation before insert:
 - `description`, when present, has at most 100 characters and contains a character other than a space. A missing or empty description is stored as null. A description made only of spaces rejects the array.
 - One invalid object rejects the array. Nothing from that request is inserted, including the valid objects.
 
+Direct `POST /api/expense` inserts always leave `receipt_item_id` null.
+
+## Receipt-generated expense
+
+`POST /api/receipt` persists the receipt and its generated expenses in one transaction. For each stored `receipt_item`:
+
+| Expense field | Source |
+|---------------|--------|
+| amount | `receipt_item.line_total + COALESCE(receipt_item.discount_total, 0)` |
+| payment_date | Date component of `receipt_header.issued_at` |
+| category_id | `receipt_item.category_id` |
+| currency | `receipt_header.currency` |
+| description | null |
+| receipt_item_id | Source `receipt_item.id` |
+
+The receipt-level `discount_summary` is ignored because each item discount is already applied to its own generated expense. A generated amount must fit `DECIMAL(8,2)`. An out-of-range amount is `invalid submission`; receipt persistence and all generated expenses are rolled back. Any persistence failure is `storage failed` and rolls back the same transaction.
+
+Before creating a generated expense for an existing item, storage checks for an expense with that `receipt_item_id`. The database unique constraint is the final duplicate guard.
+
 ## Summary projection
 
 Not a table. For `payment_date` between `from` and `to`, inclusive:
@@ -106,7 +133,7 @@ Not a table. For `payment_date` between `from` and `to`, inclusive:
 | currency | `expense.currency`, as stored |
 | amount | `SUM(expense.amount)`, scale 2 |
 
-Group by category id, category name, and currency. Add amounts only when both the category and the currency match. `eur` and `EUR` are separate groups. Exclude `Unknown` only because expenses cannot reference it. The sum may exceed eight digits; the eight-digit limit applies to each stored amount, not to the total. There is no limit on how many expense rows share a payment date. Order of the summary is not significant.
+Group by category id, category name, and currency. Add amounts only when both the category and the currency match. `eur` and `EUR` are separate groups. Manually submitted expenses cannot reference `Unknown`, but generated expenses can inherit `Unknown` from a receipt item, so an `Unknown` total may appear. The sum may exceed eight digits; the eight-digit limit applies to each stored amount, not to the total. There is no limit on how many expense rows share a payment date. Order of the summary is not significant.
 
 ## Category name list
 

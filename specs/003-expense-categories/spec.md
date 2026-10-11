@@ -26,6 +26,15 @@
 - Q: What happens when a summary cannot be read? → A: The reason is "storage failed", and stored expenses stay unchanged.
 - Q: Does one invalid expense reject the rest of the storage request? → A: Yes. One expense with a blank or unknown category, a payment date that is not a real calendar date, or a missing required part refuses the whole request. No expense from that request is stored.
 
+### Session 2026-10-11
+
+- Q: What expenses are created when a receipt is stored? → A: Receipt storage creates exactly one expense for each receipt item. Its amount is the item's line total plus that item's discount total, with a missing item discount treated as zero. The receipt-level discount summary is ignored.
+- Q: Which other values are copied to the generated expense? → A: Payment date is the date component of `receipt.issuedAt`, category is the receipt item's category, currency is the receipt header currency, and description is null.
+- Q: How are generated and manually submitted expenses distinguished? → A: A generated expense has an optional unique link to its source receipt item. An expense submitted directly through `POST /api/expense` has no receipt-item link.
+- Q: Can saving one receipt item create its expense more than once? → A: No. At most one expense may reference a receipt item. Saving a new receipt creates new receipt items and therefore new expenses.
+- Q: What happens to receipts and expenses that already exist? → A: Existing receipts are not backfilled. Existing and manually submitted expenses remain valid with no receipt-item link.
+- Q: What if a generated amount does not fit the expense amount range? → A: The whole receipt submission is refused with reason "invalid submission"; neither the receipt nor any generated expense is retained.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Store household expenses (Priority: P1)
@@ -79,6 +88,25 @@ An authorized caller transcribes or stores a receipt. Every line item has an exp
 3. **Given** a line item category of Unknown or one of the household dictionary names, **When** the caller stores that receipt, **Then** the category is accepted and returned unchanged.
 4. **Given** a line item category that is not an exact match for Unknown or a household name, including a different case or surrounding spaces, **When** the caller stores that receipt, **Then** the service returns the reason "incomplete" and a short explanation, and no receipt is stored.
 5. **Given** a receipt with several line items, **When** it is transcribed or stored, **Then** each line item has its own expense category. No other receipt part has an expense category.
+
+---
+
+### User Story 7 - Create expenses while storing a receipt (Priority: P1)
+
+An authorized caller stores a structured receipt. The service creates one linked expense for every stored receipt item in the same atomic operation.
+
+**Why this priority**: Receipt items represent spending that must appear in the shared expense summaries without requiring a second manual submission.
+
+**Independent Test**: Store a receipt containing items with and without item-level discounts. Confirm that one expense is created per item, each amount is the line total plus its item discount, and each expense copies the receipt date, item category, and receipt currency while leaving description empty.
+
+**Acceptance Scenarios**:
+
+1. **Given** a valid receipt item with no item discount, **When** the receipt is stored, **Then** one expense is created with the line total as its amount.
+2. **Given** a valid receipt item whose line total is `26.07` and item discount total is `-8.69`, **When** the receipt is stored, **Then** its expense amount is `17.38`.
+3. **Given** a stored receipt item, **When** its generated expense is inspected through a summary, **Then** it contributes under the item's category, the receipt header currency, and the date component of the receipt header issue time.
+4. **Given** a receipt-level discount summary, **When** the receipt is stored, **Then** it does not create another expense and is not applied again to item expenses.
+5. **Given** a receipt with several items, **When** either the receipt or any generated expense cannot be stored, **Then** neither the receipt nor any generated expense is retained.
+6. **Given** a receipt item that already has a linked generated expense, **When** expense generation is evaluated again, **Then** no second expense is created for that item.
 
 ---
 
@@ -152,6 +180,11 @@ An authorized caller reads the household category names before storing expenses.
 - A receipt line item may use Unknown or a household dictionary name. Any other category refuses the receipt and stores nothing.
 - Only receipt line items have an expense category. Item discounts, the discount summary, seller, payments, tax summary, totals, and unplaced lines do not.
 - Transcription sets Unknown on every line item even when the caller might later choose a dictionary category. Storage of a structured receipt does not replace a submitted category with Unknown.
+- Storing a receipt creates one expense per receipt item. The expense amount is `line total + item discount total`; a missing item discount is zero. The receipt-level discount summary is ignored.
+- A generated expense uses the date component of the receipt issue time, the item category, and the receipt currency. Its description is null.
+- A generated expense has a unique optional link to its receipt item. Manually submitted expenses and expenses that predate this behavior have no receipt-item link.
+- Existing receipts are not backfilled with expenses. A new receipt submission creates new receipt items and one expense for each.
+- If any generated amount is outside the expense range, or any generated expense cannot be saved, the receipt and all expenses from that receipt submission are rolled back.
 - One invalid expense rejects the whole storage request, including every valid expense in that same request. A blank or unknown category, a payment date that is not a real calendar date, a description made only of spaces, or a missing required part is enough. Expenses from earlier successful requests stay retained.
 - The same expense submitted twice is retained twice. Duplicate detection is outside this capability.
 - A description of exactly 100 characters is accepted. A description of 101 characters rejects the whole list.
@@ -160,7 +193,7 @@ An authorized caller reads the household category names before storing expenses.
 - The limit of 500 applies only to one storage request. It does not limit how many expenses may be stored for one payment date. Three accepted requests of 200 expenses on the same date retain 600 expenses.
 - A category is never blank. Transcription fills Unknown on a receipt item because the photo has no category. An expense category is chosen by the caller and must be a household name.
 - The household dictionary is fixed. This capability does not add, rename, or remove categories.
-- Storing expenses does not create or change a receipt. Transcribing or storing a receipt does not create an expense.
+- Storing expenses does not create or change a receipt. Transcription does not create an expense. Storing a receipt creates expenses according to FR-026 through FR-031.
 
 ## Requirements *(mandatory)*
 
@@ -189,15 +222,21 @@ An authorized caller reads the household category names before storing expenses.
 - **FR-021**: The receipt definition MUST require an expense category on each line item and MUST NOT list the allowed category names.
 - **FR-022**: Receipt storage MUST keep and return the expense category submitted on each line item only when that category is an exact match for Unknown or a household name, including spelling, case, surrounding spaces, and the single ellipsis. Any other category MUST be refused with the reason "incomplete", and no receipt is stored.
 - **FR-023**: No receipt part other than a line item may have an expense category.
-- **FR-024**: Storing an expense MUST NOT create or change a receipt. Storing or transcribing a receipt MUST NOT create an expense.
+- **FR-024**: Storing an expense MUST NOT create or change a receipt. Transcribing a receipt MUST NOT create an expense.
 - **FR-025**: An authorized caller MUST be able to read the household category names. The result MUST be exactly the names in FR-002, in that order, and each result MUST be the name. The result MUST NOT include Unknown. A caller who is not authorized MUST receive the reason "not authorized".
+- **FR-026**: Storing a receipt MUST create exactly one expense for each receipt line item. Receipt storage and generated-expense storage MUST be one atomic operation.
+- **FR-027**: A generated expense amount MUST equal the receipt item's line total plus that item's discount total. A missing item discount MUST be treated as zero. The receipt-level discount summary MUST NOT affect generated expenses and MUST NOT create an additional expense.
+- **FR-028**: A generated expense MUST use the date component of the receipt header issue time as `payment_date`, the receipt item's category as its category, the receipt header currency as its currency, and null as its description.
+- **FR-029**: A generated expense MUST have an optional unique link to its source receipt item. At most one expense MAY reference one receipt item. Expenses submitted through `POST /api/expense` and existing expenses MAY have no receipt-item link.
+- **FR-030**: Existing receipts MUST NOT be backfilled with generated expenses.
+- **FR-031**: If any generated amount is outside the range in FR-005, receipt storage MUST be refused with reason "invalid submission". If receipt or generated-expense persistence fails, the service MUST return "storage failed". In either case, neither the receipt nor any generated expense from that submission may remain stored.
 
 ### Key Entities
 
 - **Expense category**: One stored name. The household names are the only names an expense may use. Unknown is an additional stored name used by receipt line items.
-- **Expense**: One recorded payment in the shared ledger. It has an amount, a payment date, a household category, a currency, and an optional description.
+- **Expense**: One recorded payment in the shared ledger. It has an amount, a payment date, a category, a currency, an optional description, and an optional unique source receipt-item link. A receipt-generated expense may also use Unknown because it copies the receipt item's accepted category.
 - **Category total**: The summed amount of one category name and one currency across an inclusive payment-date range. It has the category name, the currency, and the amount. It has no description.
-- **Receipt line item**: A line on a transcribed or stored receipt. It has a required expense category. Transcription sets that category to Unknown.
+- **Receipt line item**: A line on a transcribed or stored receipt. It has a required expense category. Transcription sets that category to Unknown. Once stored, it is the source of exactly one generated expense.
 
 ## Success Criteria *(mandatory)*
 
@@ -210,6 +249,8 @@ An authorized caller reads the household category names before storing expenses.
 - **SC-004**: 100% of successfully transcribed receipt line items show the expense category Unknown.
 - **SC-005**: 100% of receipt submissions whose only defect is a missing or blank line-item expense category are refused, and no receipt is stored.
 - **SC-006**: A refused expense submission changes none of the daily summaries.
+- **SC-008**: Storing a receipt with N line items creates N linked expenses, and each generated expense matches the amount, date, category, currency, and null-description rules in FR-027 and FR-028.
+- **SC-009**: 100% of receipt submissions with an out-of-range generated amount or a persistence failure retain neither the receipt nor any generated expense from that submission.
 
 ## Assumptions
 
@@ -224,7 +265,8 @@ An authorized caller reads the household category names before storing expenses.
 - Expense amounts and category totals are expressed with two decimal places.
 - Currency is any three characters, kept unchanged. "eur" and "EUR" are different values.
 - Description length counts characters, so Polish letters count as one character each.
-- Unknown is a stored category name so a transcribed receipt item can refer to it. It is not a household name and cannot be used on an expense.
+- Unknown is a stored category name so a transcribed receipt item can refer to it. It cannot be used on a manually submitted expense, but a receipt-generated expense may inherit it from its source item.
 - The receipt definition requires a category and does not publish the allowed names. Storage still accepts only Unknown or a household name.
-- This capability does not list, edit, or delete individual expenses, and it does not turn a receipt into expenses.
+- This capability does not list, edit, or delete individual expenses.
 - Existing receipt rules stay in place. A receipt that was complete before this change must also include an expense category on every line item.
+- Existing receipt rows are not backfilled. Existing expense rows remain unlinked.

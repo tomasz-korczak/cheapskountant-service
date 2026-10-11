@@ -19,11 +19,13 @@ import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
+import pl.tomaszko.cheapskountant.expense.persistence.ExpenseRepository;
 import pl.tomaszko.cheapskountant.receipt.ReceiptFailureException;
 import pl.tomaszko.cheapskountant.receipt.ReceiptFailureReason;
 import pl.tomaszko.cheapskountant.receipt.ReceiptFixtures;
 import pl.tomaszko.cheapskountant.receipt.api.StoredReceiptResponse;
 import pl.tomaszko.cheapskountant.receipt.persistence.ReceiptEntity;
+import pl.tomaszko.cheapskountant.receipt.persistence.ReceiptExpenseFactory;
 import pl.tomaszko.cheapskountant.receipt.persistence.ReceiptMapper;
 import pl.tomaszko.cheapskountant.receipt.persistence.ReceiptRepository;
 import pl.tomaszko.cheapskountant.receipt.transcription.ReceiptDraft;
@@ -33,6 +35,8 @@ class CreateReceiptFailureTest {
 
     @Mock
     private ReceiptRepository receiptRepository;
+    @Mock
+    private ExpenseRepository expenses;
     @Mock
     private PlatformTransactionManager transactionManager;
 
@@ -44,6 +48,8 @@ class CreateReceiptFailureTest {
                 new ReceiptCompletenessChecker(),
                 receiptRepository,
                 new ReceiptMapper(),
+                expenses,
+                new ReceiptExpenseFactory(),
                 transactionManager);
     }
 
@@ -209,6 +215,39 @@ class CreateReceiptFailureTest {
                 request.unparsedLines());
 
         assertThat(service.create(withClientId).id()).isEqualTo(4L);
+    }
+
+    @Test
+    void oversizedLineRejectsTheReceiptAndStoresNothing() {
+        when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
+        ReceiptDraft draft = ReceiptFixtures.validDraft();
+        ReceiptDraft.Item item = draft.items().get(0);
+        ReceiptDraft oversized = new ReceiptDraft(
+                draft.documentType(),
+                draft.source(),
+                draft.seller(),
+                draft.receipt(),
+                List.of(new ReceiptDraft.Item(
+                        item.description(),
+                        item.itemType(),
+                        item.quantity(),
+                        item.unit(),
+                        "1000000.00",
+                        "1000000.00",
+                        item.taxCategory(),
+                        item.category(),
+                        item.discount())),
+                draft.discountSummary(),
+                draft.taxSummary(),
+                draft.totals(),
+                draft.payments(),
+                draft.fiscalData(),
+                draft.unparsedLines());
+
+        assertFailure(oversized, ReceiptFailureReason.INVALID_SUBMISSION);
+        verify(receiptRepository, never()).saveAndFlush(any());
+        verify(expenses, never()).saveAllAndFlush(any());
+        verify(transactionManager).rollback(any());
     }
 
     @Test

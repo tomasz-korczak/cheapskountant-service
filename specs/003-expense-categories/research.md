@@ -2,9 +2,9 @@
 
 ## Category dictionary and Unknown
 
-**Decision**: One `expense_category` table holds the 34 household names plus `Unknown`. Names are unique and matched exactly, including Polish characters, spaces, punctuation, and the single ellipsis in `Pieniądze, po prostu…`. Callers cannot change the rows. An expense may use only a household name. A receipt line item may use a household name or `Unknown`.
+**Decision**: One `expense_category` table holds the 34 household names plus `Unknown`. Names are unique and matched exactly, including Polish characters, spaces, punctuation, and the single ellipsis in `Pieniądze, po prostu…`. Callers cannot change the rows. A manually submitted expense may use only a household name. A receipt line item may use a household name or `Unknown`, and its generated expense inherits that category.
 
-**Rationale**: The planning request makes the receipt item category a required foreign key, and transcription must set `Unknown`. A required foreign key needs a row for that name. The spec still refuses `Unknown` on an expense, so the service treats that name as unknown for `POST /api/expense` even though the row exists for receipts.
+**Rationale**: The planning request makes the receipt item category a required foreign key, and transcription must set `Unknown`. A required foreign key needs a row for that name. The service still refuses `Unknown` on `POST /api/expense`; generated expenses bypass that caller-input rule and copy the already validated receipt-item association.
 
 **Alternatives considered**: Leaving `Unknown` out of the table and storing a free-text category on the receipt item. Rejected because the planning request requires a foreign key. Treating `Unknown` as a valid expense category. Rejected because it is the transcription placeholder, not a household category.
 
@@ -63,3 +63,27 @@
 **Rationale**: The caller who stores an expense must choose a household name. The photo cannot supply one, and the receipt definition does not list the names. Returning only the name keeps database ids out of the response. `Unknown` stays available for receipt items and is refused on an expense, so it is not offered as a choice.
 
 **Alternatives considered**: Including `Unknown` in the list. Rejected because an expense that uses it is refused. Returning bare strings. Rejected because the response is a list of dictionary items, and each item is the name.
+
+## Generating expenses from stored receipt items
+
+**Decision**: `POST /api/receipt` creates one expense per receipt item in the same transaction. Amount is `line_total + COALESCE(discount_total, 0)`. Payment date is the date component of `receipt_header.issued_at`; category is the item's category; currency is the header currency; description is null. The receipt-level discount summary is ignored.
+
+**Rationale**: Item discounts are already associated with the item and are negative values, so adding them produces the net item expense. Applying the receipt-level summary would count those discounts a second time. A single transaction prevents a stored receipt from existing without its corresponding expense rows.
+
+**Alternatives considered**: Creating one expense for the receipt total. Rejected because the requirement is one expense per item and each item can have a different category. Creating an extra expense for the receipt-level discount summary. Rejected because it duplicates item discounts. Reusing `StoreExpensesService`. Rejected because that path validates caller submissions, refuses `Unknown`, parses date strings, and has a 500-row request limit that does not describe receipt persistence.
+
+## Receipt-item link and duplicate prevention
+
+**Decision**: Add nullable `expense.receipt_item_id`, unique and foreign-keyed to `receipt_item` with `ON DELETE SET NULL`. Directly submitted and existing expenses leave it null. Existing receipts are not backfilled. Before generating an expense for an existing item, the service checks whether the link already exists; the unique constraint provides the concurrency-safe final guard.
+
+**Rationale**: The link records provenance and enforces at most one generated expense per item without preventing standalone expenses. `ON DELETE SET NULL` preserves ledger history if a receipt item is removed. A new receipt submission creates new item ids, so it correctly creates a new set of expenses.
+
+**Alternatives considered**: No source link. Rejected because generation could not be made idempotent per item. A required link. Rejected because manual and existing expenses have no receipt. Linking to the receipt rather than the item. Rejected because it would not identify or uniquely guard each one-to-one item mapping.
+
+## Generated amount overflow and rollback
+
+**Decision**: Validate every generated net amount against `DECIMAL(8,2)` before inserting the receipt. An out-of-range amount returns `invalid submission`. A database failure returns `storage failed`. Both outcomes roll back the receipt and every generated expense.
+
+**Rationale**: Receipt line amounts use `DECIMAL(14,2)`, so valid receipt input can exceed the expense column. Pre-validation gives a deterministic client error and avoids partially persisted data.
+
+**Alternatives considered**: Widening `expense.amount`. Rejected because the chosen behavior is to preserve the existing expense range. Saving the receipt but skipping the oversized item. Rejected because every saved receipt item must create an expense.
