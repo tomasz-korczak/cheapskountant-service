@@ -7,7 +7,8 @@ Validates expense storage, the category summary, and the receipt item category. 
 - `GET /api/expenses` returns the 34 household category names. Each item is the name. `Unknown` is not included.
 - `POST /api/expense` stores 1 to 500 expenses. That limit is one request. Further requests may add more expenses on the same payment date. Category is sent as a name and stored as a foreign key.
 - `GET /api/expense?from=YYYY-MM-DD&to=YYYY-MM-DD` returns one summed amount per category name and currency in that inclusive range.
-- Both calls require `Authorization: Bearer <API_KEY>`.
+- `GET /api/expense/daily?payment_date=YYYY-MM-DD` returns that day's standalone expenses, then one summed row per receipt. A standalone row uses the expense id and category name. A receipt row uses the receipt id and seller trade name.
+- These calls require `Authorization: Bearer <API_KEY>`.
 - Receipt `items[].category` is required. The schema does not list allowed names.
 - Transcription sets every item category to `Unknown`.
 - Storing a receipt creates one linked expense per receipt item in the same transaction.
@@ -30,6 +31,7 @@ Expected:
 - A payment date that cannot exist, such as 31 February, is `invalid submission` for storage and for a summary.
 - Three accepted requests of 200 expenses on one payment date leave 600 stored expenses for that date.
 - A summary with no expenses is an empty array. A missing date, or a first date after the last date, is `invalid submission`. The same date for both ends is that one day.
+- A daily list returns each expense on that payment date with no receipt item, ordered by expense id, then one total per receipt on that date, ordered by receipt id. Receipt-linked expenses appear only in the receipt total. A date with no rows is an empty array. A missing or impossible `payment_date` is `invalid submission`.
 - A stored receipt item returns its category name. A receipt item with no category, or a category that is not seeded, is `incomplete` and is not saved.
 - A stored receipt creates one expense per item. An item expense is `line total + item discount total`, with a missing discount treated as zero. The receipt-level discount summary is ignored.
 - Generated expenses use the receipt issue date, item category, and receipt currency; description is null. Each is uniquely linked to its source item.
@@ -37,7 +39,7 @@ Expected:
 - A transcribed receipt has `Unknown` on every item.
 - The prompt tells the model to set `category` to `Unknown`.
 - Both schema copies require `items[].category` and do not enumerate category names.
-- `GET /api/expense` and `GET /api/expenses` without the API key are `not authorized`.
+- `GET /api/expense`, `GET /api/expense/daily`, and `GET /api/expenses` without the API key are `not authorized`.
 
 Docker is required for the MariaDB persistence test. Other tests do not call OpenRouter.
 
@@ -72,6 +74,14 @@ Store two expenses with `POST /api/expense`:
 Expected: HTTP 201 and the same two expenses. `GET /api/expense?from=2026-10-10&to=2026-10-10` returns two objects: category `Jedzenie`, currency `PLN`, amount `12.50`; and category `Jedzenie`, currency `EUR`, amount `3.50`. Descriptions are absent. The amounts are not added together.
 
 A third object with `"category": "Unknown"` in a new request returns HTTP 400, reason `invalid submission`, and does not change that total.
+
+## Manual daily list
+
+Ask for `GET /api/expense/daily?payment_date=2026-10-10` with the same API key, after the two expenses above are stored.
+
+Expected: HTTP 200 and two objects, in expense-id order. Each has `type` `expense`, `date` `2026-10-10`, an `id`, `name` `Jedzenie`, and `amount` `12.50` or `3.50`. They stay separate rows. Currency and description are absent.
+
+After the receipt check below, ask for the date part of that receipt's `issuedAt`. Expected: the receipt's line expenses are absent as `type` `expense`. One later object has `type` `receipt`, `id` equal to the stored receipt id, `name` equal to the seller trade name, and `amount` equal to the sum of that receipt's expense amounts. A missing `payment_date`, or `2026-02-31`, is HTTP 400 with reason `invalid submission`.
 
 ## Manual receipt check
 

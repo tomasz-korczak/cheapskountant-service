@@ -62,6 +62,9 @@ public class SecurityConfig {
             if ("/api/expense".equals(path) && ("GET".equalsIgnoreCase(method) || "POST".equalsIgnoreCase(method))) {
                 return true;
             }
+            if ("/api/expense/daily".equals(path) && "GET".equalsIgnoreCase(method)) {
+                return true;
+            }
             return "/api/expenses".equals(path) && "GET".equalsIgnoreCase(method);
         }
 

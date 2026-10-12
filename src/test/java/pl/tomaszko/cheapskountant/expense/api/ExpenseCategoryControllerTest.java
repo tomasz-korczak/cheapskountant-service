@@ -17,6 +17,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import pl.tomaszko.cheapskountant.config.SecurityConfig;
 import pl.tomaszko.cheapskountant.expense.HouseholdCategories;
+import pl.tomaszko.cheapskountant.expense.application.DailyExpenseService;
 import pl.tomaszko.cheapskountant.expense.application.ExpenseSummaryService;
 import pl.tomaszko.cheapskountant.expense.application.StoreExpensesService;
 import pl.tomaszko.cheapskountant.expense.persistence.ExpenseCategoryEntity;
@@ -35,6 +36,9 @@ class ExpenseCategoryControllerTest {
 
     @MockitoBean
     private ExpenseSummaryService expenseSummaryService;
+
+    @MockitoBean
+    private DailyExpenseService dailyExpenseService;
 
     @MockitoBean
     private ExpenseCategoryRepository categories;

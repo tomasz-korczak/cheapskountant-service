@@ -1,9 +1,9 @@
 openapi: 3.0.3
 info:
   title: Cheapskountant expense categories
-  version: 1.3.0
+  version: 1.4.0
   description: |
-    Adds GET /api/expenses, and GET and POST /api/expense.
+    Adds GET /api/expenses, GET and POST /api/expense, and GET /api/expense/daily.
     Extends the receipt item from specs/002-receipt-discounts/contracts/receipt-discounts.openapi.yaml
     with a required category name. The receipt schema does not list allowed names.
     Errors use the existing reason and explanation body.
@@ -112,6 +112,57 @@ paths:
                 $ref: '#/components/schemas/Failure'
         '500':
           description: storage failed. Nothing from this request remains stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Failure'
+  /api/expense/daily:
+    get:
+      summary: List standalone expenses and receipt totals for one payment date
+      description: |
+        Requires Authorization Bearer API_KEY.
+        payment_date is one calendar date.
+        Returns every expense on that date whose receipt_item_id is null, then one summed row
+        for each receipt that has expenses on that date.
+        A standalone row uses type expense, the expense id, and the category name.
+        A receipt row uses type receipt, the receipt id, and the seller trade name.
+        Its amount is the sum of the expense amounts for that receipt on this date.
+        Expenses linked to a receipt item are included only in that receipt row.
+        Standalone rows are ordered by expense id. Receipt rows follow, ordered by receipt id.
+        Amounts use two decimal places. Currency and description are omitted.
+        A date with no rows is 200 and an empty array.
+        The read does not change stored expenses.
+      parameters:
+        - name: payment_date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Standalone expenses, then one total per receipt.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DailyExpense'
+        '400':
+          description: |
+            invalid submission. A missing payment_date, or a value that is not a real calendar date.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Failure'
+        '401':
+          description: not authorized. The same reason and explanation whether or not expenses exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Failure'
+        '500':
+          description: storage failed. Stored expenses stay unchanged.
           content:
             application/json:
               schema:
@@ -273,6 +324,30 @@ components:
           type: number
           multipleOf: 0.01
           description: Sum of stored amounts for that category and currency in the range. Scale 2. May exceed 999999.99.
+    DailyExpense:
+      type: object
+      additionalProperties: false
+      required: [type, date, id, name, amount]
+      properties:
+        type:
+          type: string
+          enum: [expense, receipt]
+          description: expense is one stored expense with no receipt item. receipt is one receipt's expenses for this date.
+        date:
+          type: string
+          format: date
+          description: payment_date of the expense rows included in this object.
+        id:
+          type: integer
+          format: int64
+          description: expense.id when type is expense. receipt.id when type is receipt.
+        name:
+          type: string
+          description: Category name when type is expense. Seller trade name when type is receipt.
+        amount:
+          type: number
+          multipleOf: 0.01
+          description: The stored expense amount, or the sum of expense amounts for that receipt on this date. Scale 2.
     ReceiptItemCategory:
       type: object
       description: |

@@ -32,6 +32,7 @@ import org.springframework.transaction.support.SimpleTransactionStatus;
 
 import pl.tomaszko.cheapskountant.config.SecurityConfig;
 import pl.tomaszko.cheapskountant.expense.HouseholdCategories;
+import pl.tomaszko.cheapskountant.expense.application.DailyExpenseService;
 import pl.tomaszko.cheapskountant.expense.application.ExpenseSubmissionValidator;
 import pl.tomaszko.cheapskountant.expense.application.ExpenseSummaryService;
 import pl.tomaszko.cheapskountant.expense.application.StoreExpensesService;
@@ -42,7 +43,7 @@ import pl.tomaszko.cheapskountant.receipt.ReceiptFailureException;
 import pl.tomaszko.cheapskountant.receipt.api.ReceiptErrorHandler;
 
 @WebMvcTest(controllers = ExpenseController.class)
-@Import({ReceiptErrorHandler.class, SecurityConfig.class, StoreExpensesService.class, ExpenseSubmissionValidator.class, ExpenseSummaryService.class})
+@Import({ReceiptErrorHandler.class, SecurityConfig.class, StoreExpensesService.class, ExpenseSubmissionValidator.class, ExpenseSummaryService.class, DailyExpenseService.class})
 class ExpenseControllerTest {
 
     @Autowired
@@ -109,6 +110,30 @@ class ExpenseControllerTest {
     }
 
     @Test
+    void dailyListReturnsStandaloneExpensesThenReceiptTotals() throws Exception {
+        when(expenses.findStandaloneByPaymentDate(LocalDate.parse("2026-10-10")))
+                .thenReturn(List.of(new DailyExpense("expense", LocalDate.parse("2026-10-10"), 4L, "Jedzenie", new BigDecimal("12.5"))));
+        when(expenses.summarizeReceiptsByPaymentDate(LocalDate.parse("2026-10-10")))
+                .thenReturn(List.of(new DailyExpense("receipt", LocalDate.parse("2026-10-10"), 9L, "BIEDRONKA", new BigDecimal("23.87"))));
+
+        mockMvc.perform(get("/api/expense/daily")
+                        .param("payment_date", "2026-10-10")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer test-api-key"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].type").value("expense"))
+                .andExpect(jsonPath("$[0].date").value("2026-10-10"))
+                .andExpect(jsonPath("$[0].id").value(4))
+                .andExpect(jsonPath("$[0].name").value("Jedzenie"))
+                .andExpect(jsonPath("$[0].amount").value(12.50))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("12.50")))
+                .andExpect(jsonPath("$[1].type").value("receipt"))
+                .andExpect(jsonPath("$[1].id").value(9))
+                .andExpect(jsonPath("$[1].name").value("BIEDRONKA"))
+                .andExpect(jsonPath("$[1].amount").value(23.87));
+    }
+
+    @Test
     void rejectsAnInvalidExpenseList() throws Exception {
         expectInvalid("[]");
         expectInvalid("{}");
@@ -158,6 +183,18 @@ class ExpenseControllerTest {
                 .andExpect(jsonPath("$.reason").value("storage failed"));
     }
 
+    @Test
+    void rejectsABadDailyDateAndAFailedDailyRead() throws Exception {
+        expectDailyInvalid(null);
+        expectDailyInvalid("2026-02-31");
+        when(expenses.findStandaloneByPaymentDate(any())).thenThrow(new DataAccessResourceFailureException("down"));
+        mockMvc.perform(get("/api/expense/daily")
+                        .param("payment_date", "2026-10-10")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer test-api-key"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.reason").value("storage failed"));
+    }
+
     private void expectInvalid(String body) throws Exception {
         mockMvc.perform(post("/api/expense")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -178,6 +215,17 @@ class ExpenseControllerTest {
         mockMvc.perform(request)
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.reason").value("invalid submission"));
+    }
+
+    private void expectDailyInvalid(String paymentDate) throws Exception {
+        var request = get("/api/expense/daily").header(HttpHeaders.AUTHORIZATION, "Bearer test-api-key");
+        if (paymentDate != null) {
+            request.param("payment_date", paymentDate);
+        }
+        mockMvc.perform(request)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.reason").value("invalid submission"));
+        verify(expenses, never()).findStandaloneByPaymentDate(any());
     }
 
     private String listOf(int count) {

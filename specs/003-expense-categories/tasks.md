@@ -127,7 +127,7 @@
 
 **Purpose**: Confirm the quickstart automated checks
 
-- [x] T026 Run `mvn test` from the repository root with `JAVA_HOME` set to `C:\tools\jdk-23.0.2`. Docker must be available for the MariaDB Testcontainers tests. Confirm the expectations in `specs/003-expense-categories/quickstart.md`: category-name list, atomic expense storage, date-range summary, receipt item category, transcription `Unknown`, both schema copies, and unauthorized expense reads.
+- [x] T026 Run `mvn test` from the repository root with `JAVA_HOME` set to `C:\tools\jdk-23.0.2`. Docker must be available for the MariaDB Testcontainers tests. Confirm the expectations in `specs/003-expense-categories/quickstart.md`: category-name list, atomic expense storage, date-range summary, daily list, receipt item category, transcription `Unknown`, both schema copies, and unauthorized expense reads.
 
 ---
 

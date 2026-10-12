@@ -35,6 +35,10 @@
 - Q: What happens to receipts and expenses that already exist? → A: Existing receipts are not backfilled. Existing and manually submitted expenses remain valid with no receipt-item link.
 - Q: What if a generated amount does not fit the expense amount range? → A: The whole receipt submission is refused with reason "invalid submission"; neither the receipt nor any generated expense is retained.
 
+### Session 2026-10-12
+
+- Q: How does a caller see the receipts and the non-receipt expenses for one payment date? → A: `GET /api/expense/daily?payment_date=YYYY-MM-DD` returns both. An expense with no receipt item is one row: type `expense`, that expense's id, the category name, and that amount. Expenses linked to receipt items on that date are summed per receipt: type `receipt`, the receipt id, the seller trade name, and the sum. Standalone rows come first, ordered by expense id. Receipt rows follow, ordered by receipt id. Currency and description are omitted. A missing or impossible date is `invalid submission`. A read that cannot finish is `storage failed`. The caller must be authorized. The id is returned so a later request can use it.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Store household expenses (Priority: P1)
@@ -123,10 +127,10 @@ An authorized caller submits an expense list that breaks a submission rule, or a
 1. **Given** an authorized caller and a list of 501 expenses, **When** the caller submits it, **Then** the service returns the reason "invalid submission" and a short explanation, and none of those expenses are retained.
 2. **Given** an authorized caller and a submission that is empty, unreadable, or not a list of expenses, **When** the caller submits it, **Then** the service returns the reason "invalid submission" and a short explanation, and nothing is retained.
 3. **Given** an authorized caller and a list in which any expense lacks an amount, payment date, category, or currency, or has an amount that is not a number with at most six digits before the decimal separator and two after it, a payment date that includes a time or is not a real calendar date, a currency that is not exactly three characters, a category that is not an exact household name, the category Unknown, a description made only of spaces, or a description longer than 100 characters, **When** the caller submits that list, **Then** the service returns the reason "invalid submission" and a short explanation, and none of the expenses in that list are retained, including the valid ones.
-4. **Given** a caller who is not authorized, **When** that caller stores expenses, asks for a summary, or reads the category names, **Then** the service returns the same reason "not authorized" and the same short explanation whether or not any expenses exist, and nothing is retained or revealed.
+4. **Given** a caller who is not authorized, **When** that caller stores expenses, asks for a summary, asks for a daily list, or reads the category names, **Then** the service returns the same reason "not authorized" and the same short explanation whether or not any expenses exist, and nothing is retained or revealed.
 5. **Given** an authorized caller and a summary request that lacks a first date or a last date, whose dates are not real calendar dates, or whose first date is after the last date, **When** the caller submits it, **Then** the service returns the reason "invalid submission" and a short explanation.
 6. **Given** a complete list of expenses and a failure while saving it, **When** the save does not finish, **Then** the service returns the reason "storage failed" and a short explanation, and none of the expenses in that list remain retained.
-7. **Given** stored expenses and a summary that cannot be read, **When** the read does not finish, **Then** the service returns the reason "storage failed" and a short explanation, and the stored expenses stay unchanged.
+7. **Given** stored expenses and a summary or a daily list that cannot be read, **When** the read does not finish, **Then** the service returns the reason "storage failed" and a short explanation, and the stored expenses stay unchanged.
 
 ---
 
@@ -162,12 +166,30 @@ An authorized caller reads the household category names before storing expenses.
 
 ---
 
+### User Story 8 - List one day's expenses and receipts (Priority: P1)
+
+An authorized caller asks for one payment date and receives the expenses that are not part of a receipt, plus one total for each receipt paid on that date. Each row carries the id of the expense or the receipt so a later request can use it.
+
+**Why this priority**: The range summary adds a category across days. The caller also needs the receipts and the other expenses for a single day, with an id for each.
+
+**Independent Test**: Store two expenses with no receipt on one date, and store a receipt whose issue date is that same day. Ask for the daily list. The two expenses are separate rows with their expense ids and category names. The receipt is one later row with the receipt id, the seller trade name, and the sum of its expense amounts. Those receipt lines are not also listed as expenses. Another date returns only what was paid that day.
+
+**Acceptance Scenarios**:
+
+1. **Given** stored expenses with no receipt item on the requested payment date, **When** the caller asks for that date, **Then** each is one row with type `expense`, that expense's id, its category name, its payment date, and its amount.
+2. **Given** several expenses that belong to one receipt and share that payment date, **When** the caller asks for that date, **Then** they appear as one row with type `receipt`, the receipt id, the seller trade name, and the sum of those amounts.
+3. **Given** expenses that belong to a receipt, **When** the caller asks for their payment date, **Then** those expenses are not also returned as type `expense`.
+4. **Given** no standalone expenses and no receipt expenses on the requested date, **When** the caller asks for that date, **Then** the list succeeds and is empty.
+5. **Given** a caller who is not authorized, **When** that caller asks for the daily list, **Then** the service returns the reason "not authorized" and a short explanation, whether or not any expenses exist.
+
+---
+
 ### Edge Cases
 
 - A submission of exactly 500 complete expenses is accepted. A submission of 501 is refused in full.
 - An empty list is not a successful store. It is an invalid submission.
 - Zero, negative, and positive amounts are accepted when they have at most six digits before the decimal separator and at most two after it. A larger amount, or one with more than two fractional digits, refuses the whole list.
-- Any calendar date is accepted, including future dates. A date that includes a time, or a date that cannot exist, such as 31 February, refuses the whole storage request. The same impossible date refuses a summary.
+- Any calendar date is accepted, including future dates. A date that includes a time, or a date that cannot exist, such as 31 February, refuses the whole storage request. The same impossible date refuses a summary and a daily list.
 - A description that is missing or empty is accepted. A description made only of spaces refuses the whole storage request.
 - The same category may be used any number of times on the same day. Repeated expenses are separate records and are all included in that day's sum.
 - Amounts that cancel out, such as 10.00 and -10.00 in the same category and the same currency, still produce a total of 0.00 for that pair. A different currency does not cancel that total.
@@ -189,7 +211,9 @@ An authorized caller reads the household category names before storing expenses.
 - The same expense submitted twice is retained twice. Duplicate detection is outside this capability.
 - A description of exactly 100 characters is accepted. A description of 101 characters rejects the whole list.
 - The first and last dates of a summary are included. A range whose first and last dates are the same day is that one day. A range that starts after it ends is refused.
-- Asking for a summary does not change stored expenses.
+- Asking for a summary or a daily list does not change stored expenses.
+- A daily list keeps two standalone expenses of the same category as two rows. It keeps two receipts on the same date as two receipt rows. It does not add those receipt totals together.
+- A daily list omits currency and description. Its amount still uses two decimal places.
 - The limit of 500 applies only to one storage request. It does not limit how many expenses may be stored for one payment date. Three accepted requests of 200 expenses on the same date retain 600 expenses.
 - A category is never blank. Transcription fills Unknown on a receipt item because the photo has no category. An expense category is chosen by the caller and must be a household name.
 - The household dictionary is fixed. This capability does not add, rename, or remove categories.
@@ -211,12 +235,12 @@ An authorized caller reads the household category names before storing expenses.
 - **FR-010**: Expense storage MUST accept a list of 1 to 500 expenses. The whole list MUST be retained, or none of it MUST be retained.
 - **FR-011**: A list of more than 500 expenses, an empty list, or a submission that cannot be read as a list of expenses MUST be refused with the reason "invalid submission". Nothing from that submission is retained.
 - **FR-012**: There MUST be no limit on how many expenses, or how many expenses of one category, may fall on one payment date. The limit of 500 applies only to one storage request. Several accepted requests MAY leave more than 500 expenses on one payment date.
-- **FR-013**: The only retrieval of stored expense amounts MUST be a summary for an inclusive payment-date range. The summary MUST contain one summed amount for each category name and currency that has at least one expense in that range. Amounts MUST be added only when both the category and the currency match. Each total MUST include that currency as stored. The summary MUST NOT convert currencies, and MUST NOT include descriptions or individual expenses. A range whose first and last dates are the same day MUST include only that day.
+- **FR-013**: One retrieval of stored expense amounts MUST be a summary for an inclusive payment-date range. The summary MUST contain one summed amount for each category name and currency that has at least one expense in that range. Amounts MUST be added only when both the category and the currency match. Each total MUST include that currency as stored. The summary MUST NOT convert currencies, and MUST NOT include descriptions or individual expenses. A range whose first and last dates are the same day MUST include only that day.
 - **FR-014**: A summary for a range with no expenses MUST succeed and MUST contain no totals. A category and currency with no expenses in that range MUST be omitted.
 - **FR-015**: One invalid expense MUST cause the whole storage request to be refused with the reason "invalid submission". No expense from that request is retained, including the valid ones. An expense is invalid when it lacks an amount, payment date, category, or currency, uses a category that is not an exact household name, uses the category Unknown, uses an amount outside the size in FR-005, uses a payment date that includes a time or is not a real calendar date, uses a currency that is not exactly three characters, uses a description made only of spaces, or uses a description longer than 100 characters.
-- **FR-016**: A caller who is not authorized MUST receive the reason "not authorized" and the same short explanation when storing expenses, requesting a summary, or reading the category names. That response MUST be the same whether or not any expenses exist, and it MUST NOT reveal whether they exist. Nothing is retained.
+- **FR-016**: A caller who is not authorized MUST receive the reason "not authorized" and the same short explanation when storing expenses, requesting a summary, requesting a daily list, or reading the category names. That response MUST be the same whether or not any expenses exist, and it MUST NOT reveal whether they exist. Nothing is retained.
 - **FR-017**: A summary request without a first date or a last date, with a value that is not a real calendar date, or with a first date after the last date MUST be refused with the reason "invalid submission".
-- **FR-018**: If saving a valid expense list does not finish, the service MUST return the reason "storage failed" and MUST NOT retain any expense from that list. If a summary cannot be read, the service MUST return the reason "storage failed" and MUST NOT change stored expenses.
+- **FR-018**: If saving a valid expense list does not finish, the service MUST return the reason "storage failed" and MUST NOT retain any expense from that list. If a summary or a daily list cannot be read, the service MUST return the reason "storage failed" and MUST NOT change stored expenses.
 - **FR-019**: Every receipt line item MUST have a non-blank expense category. Receipt storage MUST treat a missing or blank item category as incomplete, return the reason "incomplete", and store no receipt.
 - **FR-020**: Transcription MUST set the expense category of every line item to the string Unknown, because the receipt photo does not contain a category. Transcription MUST NOT refuse the photo only because no category is printed.
 - **FR-021**: The receipt definition MUST require an expense category on each line item and MUST NOT list the allowed category names.
@@ -230,12 +254,14 @@ An authorized caller reads the household category names before storing expenses.
 - **FR-029**: A generated expense MUST have an optional unique link to its source receipt item. At most one expense MAY reference one receipt item. Expenses submitted through `POST /api/expense` and existing expenses MAY have no receipt-item link.
 - **FR-030**: Existing receipts MUST NOT be backfilled with generated expenses.
 - **FR-031**: If any generated amount is outside the range in FR-005, receipt storage MUST be refused with reason "invalid submission". If receipt or generated-expense persistence fails, the service MUST return "storage failed". In either case, neither the receipt nor any generated expense from that submission may remain stored.
+- **FR-032**: An authorized caller MUST be able to read one payment date as a daily list. Each expense on that date with no receipt-item link MUST be one row with type `expense`, that expense's id, its payment date, its category name, and its amount. Expenses on that date that link to receipt items MUST be summed by receipt. Each such receipt MUST be one row with type `receipt`, the receipt id, its seller trade name, the payment date, and the sum of those amounts. Standalone rows MUST come first, ordered by expense id. Receipt rows MUST follow, ordered by receipt id. The list MUST NOT also return a receipt-linked expense as type `expense`. The list MUST NOT include currency or description. Amounts MUST use two decimal places. A date with no matching rows MUST succeed and MUST be empty. A missing `payment_date`, or a value that is not a real calendar date, MUST be refused with the reason "invalid submission".
 
 ### Key Entities
 
 - **Expense category**: One stored name. The household names are the only names an expense may use. Unknown is an additional stored name used by receipt line items.
 - **Expense**: One recorded payment in the shared ledger. It has an amount, a payment date, a category, a currency, an optional description, and an optional unique source receipt-item link. A receipt-generated expense may also use Unknown because it copies the receipt item's accepted category.
 - **Category total**: The summed amount of one category name and one currency across an inclusive payment-date range. It has the category name, the currency, and the amount. It has no description.
+- **Daily expense row**: One object in the daily list. A standalone expense contributes its own id, category name, and amount. A receipt contributes its id, seller trade name, and the sum of its expenses on that payment date.
 - **Receipt line item**: A line on a transcribed or stored receipt. It has a required expense category. Transcription sets that category to Unknown. Once stored, it is the source of exactly one generated expense.
 
 ## Success Criteria *(mandatory)*
@@ -251,10 +277,11 @@ An authorized caller reads the household category names before storing expenses.
 - **SC-006**: A refused expense submission changes none of the daily summaries.
 - **SC-008**: Storing a receipt with N line items creates N linked expenses, and each generated expense matches the amount, date, category, currency, and null-description rules in FR-027 and FR-028.
 - **SC-009**: 100% of receipt submissions with an out-of-range generated amount or a persistence failure retain neither the receipt nor any generated expense from that submission.
+- **SC-010**: For a requested payment date, the daily list matches the stored rows: each expense with no receipt-item link, then one summed row per receipt that has expenses on that date, each carrying the expense id or the receipt id.
 
 ## Assumptions
 
-- Expense storage, the date-range summary, and the household category names are caller-facing capabilities. They use the same authorization and the same failure body already used for receipts. A bad expense or summary request uses the reason "invalid submission". A receipt item category that is missing or not a stored name uses the reason "incomplete". A save that does not finish uses "storage failed". An unauthorized caller receives "not authorized".
+- Expense storage, the date-range summary, the daily list, and the household category names are caller-facing capabilities. They use the same authorization and the same failure body already used for receipts. A bad expense, summary, or daily-list request uses the reason "invalid submission". A receipt item category that is missing or not a stored name uses the reason "incomplete". A save that does not finish uses "storage failed". An unauthorized caller receives "not authorized".
 - The ledger is shared. Any authorized caller stores into the same expenses and reads the same daily summaries.
 - A submission is atomic. One invalid expense, or a save that does not finish, retains none of that list. Earlier successful submissions stay as they were.
 - An empty expense list is an invalid submission, not a request to store nothing.
@@ -267,6 +294,6 @@ An authorized caller reads the household category names before storing expenses.
 - Description length counts characters, so Polish letters count as one character each.
 - Unknown is a stored category name so a transcribed receipt item can refer to it. It cannot be used on a manually submitted expense, but a receipt-generated expense may inherit it from its source item.
 - The receipt definition requires a category and does not publish the allowed names. Storage still accepts only Unknown or a household name.
-- This capability does not list, edit, or delete individual expenses.
+- This capability does not edit or delete individual expenses. The daily list returns each standalone expense and one total per receipt for one payment date. Storage and the range summary still omit database ids.
 - Existing receipt rules stay in place. A receipt that was complete before this change must also include an expense category on every line item.
 - Existing receipt rows are not backfilled. Existing expense rows remain unlinked.

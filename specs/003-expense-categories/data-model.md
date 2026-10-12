@@ -79,7 +79,7 @@ One stored payment. Many rows may share a category and a payment date. A row may
 
 | Column | Required | Notes |
 |--------|----------|-------|
-| id | yes | Primary key. Not returned. |
+| id | yes | Primary key. Returned as `id` on a daily-list expense row. Omitted from storage and from the range summary. |
 | amount | yes | `DECIMAL(8,2)`. Zero and negative allowed. |
 | payment_date | yes | `DATE`. No time. |
 | category_id | yes | Foreign key to `expense_category`. Must be a household name, not `Unknown`. |
@@ -92,7 +92,7 @@ One stored payment. Many rows may share a category and a payment date. A row may
 
 `receipt_item_id` uses `ON DELETE SET NULL`. The unique constraint guarantees at most one generated expense per receipt item while allowing any number of null values. Existing expense rows remain null when the column is added. Existing receipts are not backfilled.
 
-Index `payment_date` so the summary range scan does not read the whole table by default.
+Index `payment_date` so the summary range scan and the daily list do not read the whole table by default.
 
 Validation before insert:
 
@@ -134,6 +134,32 @@ Not a table. For `payment_date` between `from` and `to`, inclusive:
 | amount | `SUM(expense.amount)`, scale 2 |
 
 Group by category id, category name, and currency. Add amounts only when both the category and the currency match. `eur` and `EUR` are separate groups. Manually submitted expenses cannot reference `Unknown`, but generated expenses can inherit `Unknown` from a receipt item, so an `Unknown` total may appear. The sum may exceed eight digits; the eight-digit limit applies to each stored amount, not to the total. There is no limit on how many expense rows share a payment date. Order of the summary is not significant.
+
+## Daily list projection
+
+Not a table. `GET /api/expense/daily` reads expenses whose `payment_date` equals `payment_date`. The response is the standalone rows, then the receipt rows.
+
+Standalone expenses, where `receipt_item_id` is null, one row each, ordered by `expense.id`:
+
+| Field | Notes |
+|-------|-------|
+| type | `expense` |
+| date | `expense.payment_date` |
+| id | `expense.id` |
+| name | `expense_category.name` |
+| amount | `expense.amount`, scale 2 |
+
+Receipt totals, one row per receipt, ordered by `receipt.id`. Join `expense` to `receipt_item`, `receipt`, and `seller`. Sum `expense.amount` for that receipt on this payment date:
+
+| Field | Notes |
+|-------|-------|
+| type | `receipt` |
+| date | `expense.payment_date` |
+| id | `receipt.id` |
+| name | `seller.trade_name` |
+| amount | `SUM(expense.amount)`, scale 2 |
+
+An expense with a receipt item is included only in its receipt total. Currency and description are omitted. No matching rows is an empty array. A missing or non-calendar `payment_date` is `invalid submission`. A read that cannot finish is `storage failed` and changes nothing.
 
 ## Category name list
 

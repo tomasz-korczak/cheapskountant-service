@@ -70,6 +70,10 @@ public class ExpenseEntity extends ExpenseTimestamped {
         this.receiptItem = receiptItem;
     }
 
+    public Long id() {
+        return id;
+    }
+
     public BigDecimal amount() {
         return amount;
     }

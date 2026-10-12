@@ -6,7 +6,7 @@
 
 ## Summary
 
-Authorized callers read the household category names, store a list of household expenses, and read those expenses back only as totals for an inclusive payment-date range. Each expense keeps an amount of at most six digits before the decimal separator and two after it, a calendar date, a household category name, a three-character currency, and an optional description of at most 100 characters. The caller who stores an expense chooses its category from those names. The summary adds amounts that share a category name and a currency, and returns the category name, that currency, and the summed amount. Different currencies stay in separate totals and are not converted. One storage request holds at most 500 expenses. Further requests may store more on the same payment date.
+Authorized callers read the household category names, store a list of household expenses, read those expenses back as totals for an inclusive payment-date range, and read one payment date as standalone expenses plus one total per receipt. Each expense keeps an amount of at most six digits before the decimal separator and two after it, a calendar date, a household category name, a three-character currency, and an optional description of at most 100 characters. The caller who stores an expense chooses its category from those names. The summary adds amounts that share a category name and a currency, and returns the category name, that currency, and the summed amount. Different currencies stay in separate totals and are not converted. The daily list returns each expense with no receipt item, using the expense id and category name, then one summed row per receipt, using the receipt id and seller trade name. One storage request holds at most 500 expenses. Further requests may store more on the same payment date.
 
 Receipt line items gain a required `category`. The receipt JSON schema requires that string and does not list allowed names. The database stores it as a required foreign key to the category dictionary. The dictionary is seeded with the 34 household names plus Unknown. A receipt photo has no category, so the transcription prompt tells the model to set Unknown, and the service then sets Unknown on every parsed item. Expense storage rejects a blank category, Unknown, and any other name that is not a household name. `GET /api/expenses` returns the 34 household names so the caller can choose one.
 
@@ -20,7 +20,7 @@ Storing a receipt also creates one expense per receipt item in the same transact
 
 **Storage**: MariaDB. Liquibase SQL changeset `003-expense-categories` creates `expense_category` and `expense`, seeds the category names, and adds a required `category_id` on `receipt_item`. Changeset `004-receipt-item-expenses` adds nullable, unique `expense.receipt_item_id` with an `ON DELETE SET NULL` foreign key. Hibernate `ddl-auto` stays `validate`. Earlier changesets are not edited.
 
-**Testing**: JUnit 5 and Spring Boot Test. Expense validation, summary grouping, receipt-to-expense mapping, discount arithmetic, amount overflow, and duplicate prevention are unit-tested. Persistence of expenses, receipt item categories, and generated expense links is tested against MariaDB via Testcontainers. Controller tests cover `GET` and `POST /api/expense` and the receipt storage behavior without calling OpenRouter.
+**Testing**: JUnit 5 and Spring Boot Test. Expense validation, summary grouping, the daily list, receipt-to-expense mapping, discount arithmetic, amount overflow, and duplicate prevention are unit-tested. Persistence of expenses, receipt item categories, generated expense links, and the daily list is tested against MariaDB via Testcontainers. Controller tests cover `GET` and `POST /api/expense`, `GET /api/expense/daily`, and the receipt storage behavior without calling OpenRouter.
 
 **Target Platform**: Existing Docker image of this service. No frontend.
 
@@ -30,7 +30,7 @@ Storing a receipt also creates one expense per receipt item in the same transact
 
 **Constraints**: One shared ledger. `POST /api/expense` accepts 1 to 500 expenses and keeps the whole list or none of it. That limit is per request, not per payment date. Receipt storage and its generated expenses are atomic. A generated amount outside `DECIMAL(8,2)` refuses the receipt as `invalid submission`. Expense validation failures are HTTP 400 with the existing `{reason, explanation}` body. Receipt category failures stay on the existing receipt reasons. Photos are not retained. Currencies are not converted. `GET /api/expenses` returns names only.
 
-**Scale/Scope**: `GET /api/expenses`, `GET /api/expense`, `POST /api/expense`, and generated expenses during `POST /api/receipt`. The receipt body gains `items[].category`. The category dictionary is fixed at 35 seeded names. The name list returns the 34 household names. Existing receipts are not backfilled.
+**Scale/Scope**: `GET /api/expenses`, `GET /api/expense`, `GET /api/expense/daily`, `POST /api/expense`, and generated expenses during `POST /api/receipt`. The receipt body gains `items[].category`. The category dictionary is fixed at 35 seeded names. The name list returns the 34 household names. Existing receipts are not backfilled. The daily list returns ids for later use and does not change stored rows.
 
 ## Constitution Check
 
@@ -38,15 +38,15 @@ Storing a receipt also creates one expense per receipt item in the same transact
 
 | Gate | Result |
 |------|--------|
-| I. REST API only. JSON HTTP endpoints. No frontend. | Pass. New behavior is `GET /api/expenses`, `GET /api/expense`, and `POST /api/expense`. Receipt transcription and storage keep their paths; receipt storage also writes linked expenses. |
-| II. Explicit API contracts. Correct HTTP usage. One error format. | Pass. `contracts/expense-categories.openapi.yaml` defines the three expense operations, the receipt item field, and the receipt-save side effect. Failures reuse `{reason, explanation}`. Invalid generated amounts are HTTP 400 with reason `invalid submission`. Unauthorized stays HTTP 401. A failed save is HTTP 500 with reason `storage failed`. |
-| III. Tested behavior. Endpoint and business-rule tests. | Pass. Store, summary, receipt category, generated expense mapping, atomicity, schema, and prompt behavior are covered. A live OpenRouter call is not part of the default test run. |
-| IV. Secure by default. Validate input. Authenticate. No secrets in source or logs. | Pass. `GET /api/expenses`, `GET /api/expense`, and `POST /api/expense` require `API_KEY`. The current filter only checks `POST /api/receipt` and `POST /api/transcription`, so it must be extended. Amount, date, currency, description, list size, and category name are validated before insert. |
+| I. REST API only. JSON HTTP endpoints. No frontend. | Pass. New behavior is `GET /api/expenses`, `GET /api/expense`, `GET /api/expense/daily`, and `POST /api/expense`. Receipt transcription and storage keep their paths; receipt storage also writes linked expenses. |
+| II. Explicit API contracts. Correct HTTP usage. One error format. | Pass. `contracts/expense-categories.openapi.yaml` defines the expense operations, the daily list, the receipt item field, and the receipt-save side effect. Failures reuse `{reason, explanation}`. Invalid generated amounts are HTTP 400 with reason `invalid submission`. Unauthorized stays HTTP 401. A failed save is HTTP 500 with reason `storage failed`. |
+| III. Tested behavior. Endpoint and business-rule tests. | Pass. Store, summary, daily list, receipt category, generated expense mapping, atomicity, schema, and prompt behavior are covered. A live OpenRouter call is not part of the default test run. |
+| IV. Secure by default. Validate input. Authenticate. No secrets in source or logs. | Pass. `GET /api/expenses`, `GET /api/expense`, `GET /api/expense/daily`, and `POST /api/expense` require `API_KEY`. The current filter only checks `POST /api/receipt` and `POST /api/transcription`, so it must be extended. Amount, date, currency, description, list size, and category name are validated before insert. The daily list validates `payment_date` before it reads. |
 | Configuration is external. | Pass. No new secret or setting. |
 | Database changes are Liquibase SQL changesets. | Pass. New formatted SQL changeset only. |
 | Health endpoint. | Pass. Unchanged. |
 
-Post-design re-check: the contract uses the existing error body, `GET /api/expenses`, `GET /api/expense`, and `POST /api/expense` require the API key, and the schema change is SQL in a new changeset. No frontend, anonymous expense access, or second error shape. Gates still pass.
+Post-design re-check: the contract uses the existing error body, `GET /api/expenses`, `GET /api/expense`, `GET /api/expense/daily`, and `POST /api/expense` require the API key, and the schema change is SQL in a new changeset. No frontend, anonymous expense access, or second error shape. Gates still pass.
 
 ## Project Structure
 
@@ -73,8 +73,10 @@ src/main/resources/db/changelog/db.changelog-master.sql
 src/main/java/pl/tomaszko/cheapskountant/config/SecurityConfig.java
 src/main/java/pl/tomaszko/cheapskountant/expense/
 ├── api/ExpenseController.java
+├── api/DailyExpense.java
 ├── application/StoreExpensesService.java
 ├── application/ExpenseSummaryService.java
+├── application/DailyExpenseService.java
 └── persistence/
     ├── ExpenseCategoryEntity.java
     ├── ExpenseCategoryRepository.java

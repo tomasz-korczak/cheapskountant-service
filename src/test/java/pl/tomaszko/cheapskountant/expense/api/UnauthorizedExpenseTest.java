@@ -15,6 +15,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import pl.tomaszko.cheapskountant.config.SecurityConfig;
+import pl.tomaszko.cheapskountant.expense.application.DailyExpenseService;
 import pl.tomaszko.cheapskountant.expense.application.ExpenseSummaryService;
 import pl.tomaszko.cheapskountant.expense.application.StoreExpensesService;
 import pl.tomaszko.cheapskountant.expense.persistence.ExpenseCategoryRepository;
@@ -34,14 +35,18 @@ class UnauthorizedExpenseTest {
     private ExpenseSummaryService expenseSummaryService;
 
     @MockitoBean
+    private DailyExpenseService dailyExpenseService;
+
+    @MockitoBean
     private ExpenseCategoryRepository categories;
 
     @Test
     void missingKeyIsNotAuthorizedForEveryExpensePath() throws Exception {
         expect(post("/api/expense").contentType(MediaType.APPLICATION_JSON).content("[]"));
         expect(get("/api/expense").param("from", "2026-10-10").param("to", "2026-10-10"));
+        expect(get("/api/expense/daily").param("payment_date", "2026-10-10"));
         expect(get("/api/expenses"));
-        verifyNoInteractions(storeExpensesService, expenseSummaryService, categories);
+        verifyNoInteractions(storeExpensesService, expenseSummaryService, dailyExpenseService, categories);
     }
 
     private void expect(org.springframework.test.web.servlet.RequestBuilder request) throws Exception {

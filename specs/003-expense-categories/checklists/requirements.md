@@ -38,3 +38,4 @@
 - An expense amount has at most six digits before the decimal separator and two after it. The summary covers an inclusive date range. The limit of 500 applies only to one storage request, not to how many expenses may be stored for a date.
 - Receipt storage creates one expense per item in the same atomic operation. The item discount is included once, the receipt-level discount summary is ignored, and an out-of-range generated amount rolls back the receipt.
 - Generated expenses have an optional unique source-item link. Existing receipts are not backfilled, and direct or existing expenses may remain unlinked.
+- A daily list for one payment date returns each expense with no receipt item, then one summed row per receipt. Each row includes the expense id or the receipt id. Currency and description are omitted. That read is FR-032.

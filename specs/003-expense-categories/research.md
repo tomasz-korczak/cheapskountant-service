@@ -28,7 +28,7 @@
 
 **Decision**: `POST /api/expense` accepts a JSON array of 1 to 500 expenses. Category is the name. The service resolves it to `category_id` before insert. Any one of these refuses the whole array with HTTP 400 and reason `invalid submission`, including every valid expense in that request: empty array, more than 500 objects, a body that is not an array, a missing required field, a blank category, an amount outside `DECIMAL(8,2)`, a payment date that includes a time or is not a real calendar date, a currency that is not exactly three characters, a description made only of spaces, a description longer than 100 characters, a household name that does not match exactly, or the name `Unknown`. A missing or empty description is stored as null. One database transaction inserts the list. A failure while saving, or a summary that cannot be read, returns HTTP 500, reason `storage failed`. A failed save retains none of that list. A failed summary changes nothing. Success is HTTP 201 and returns the stored expenses with the category still shown as the name.
 
-**Rationale**: The planning request says an unknown category or a missing required field rejects the whole request with HTTP 400. The spec already requires an atomic list of at most 500. Returning the stored names lets the caller see that the batch was kept without exposing database ids. Individual expense retrieval stays out of scope.
+**Rationale**: The planning request says an unknown category or a missing required field rejects the whole request with HTTP 400. The spec already requires an atomic list of at most 500. Returning the stored names lets the caller see that the batch was kept without exposing database ids. The storage response does not return those ids. The daily list is the read that returns an expense id or a receipt id.
 
 **Alternatives considered**: HTTP 422 and reason `incomplete`, matching receipt field errors. Rejected because the planning request uses HTTP 400 for expense validation. Returning only a count. Rejected because the caller should see the category names that were accepted.
 
@@ -50,11 +50,19 @@
 
 ## Authorization
 
-**Decision**: `GET /api/expenses`, `GET /api/expense`, and `POST /api/expense` require the same bearer API key as receipt storage. The filter today returns early for every method other than `POST`, and only for `/api/receipt` and `/api/transcription`. It must allow `GET` for these paths and include both `/api/expense` and `/api/expenses`.
+**Decision**: `GET /api/expenses`, `GET /api/expense`, `GET /api/expense/daily`, and `POST /api/expense` require the same bearer API key as receipt storage. The filter today returns early for every method other than `POST`, and only for `/api/receipt` and `/api/transcription`. It must allow `GET` for these paths and include `/api/expense`, `/api/expense/daily`, and `/api/expenses`.
 
-**Rationale**: The constitution requires authentication unless an endpoint is explicitly public. The category names and the expense summary are not public.
+**Rationale**: The constitution requires authentication unless an endpoint is explicitly public. The category names, the expense summary, and the daily list are not public.
 
 **Alternatives considered**: Leaving `GET` open because the current filter ignores it. Rejected as a new unauthenticated read of the ledger and of the category names.
+
+## Daily list
+
+**Decision**: `GET /api/expense/daily?payment_date=YYYY-MM-DD` returns the standalone expenses for that date, then one total per receipt. A standalone expense has `receipt_item_id` null. Its row is type `expense`, the payment date, `expense.id`, `expense_category.name`, and `expense.amount`. A receipt row joins `expense` to `receipt_item`, `receipt`, and `seller`, groups by receipt id, and sums `expense.amount` for that payment date. Its row is type `receipt`, the payment date, `receipt.id`, `seller.trade_name`, and that sum. Standalone rows are ordered by expense id. Receipt rows follow, ordered by receipt id. Currency and description are omitted. Amounts use two decimal places. No rows is HTTP 200 and an empty array. A missing or non-calendar `payment_date` is HTTP 400, reason `invalid submission`. A read that cannot finish is HTTP 500, reason `storage failed`, and changes nothing.
+
+**Rationale**: The caller needs every receipt and every non-receipt expense for one day, and needs the id of each so a later request can address it. Receipt lines are already expenses, so summing them by receipt avoids listing the same payment twice. The range summary remains the category-and-currency total across dates.
+
+**Alternatives considered**: Returning every receipt line as its own expense row. Rejected because the caller asked for one row per receipt. Including currency. Rejected because the requested object has type, date, id, name, and amount. Ordering by name. Rejected because the id order is stable and does not depend on category or seller text.
 
 ## Category name list
 
